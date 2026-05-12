@@ -1,3 +1,4 @@
+import { log, logError } from '../log';
 import type {
     LoginResponse,
     UserInfo,
@@ -31,23 +32,53 @@ export class TachikomaClient {
 
     private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
         const url = `${this.baseUrl}${path}`;
-        const resp = await fetch(url, {
-            method,
-            headers: this.headers(),
-            body: body ? JSON.stringify(body) : undefined,
-        });
+        log(`${method} ${url}`);
+
+        let resp: Response;
+        try {
+            resp = await fetch(url, {
+                method,
+                headers: this.headers(),
+                body: body ? JSON.stringify(body) : undefined,
+            });
+        } catch (err) {
+            logError(`Network error — cannot reach ${url}`, err);
+            throw new Error(`Cannot reach ${url} — check that the host is correct and the server is running. (${err instanceof Error ? err.message : err})`);
+        }
+
         if (!resp.ok) {
             const text = await resp.text().catch(() => '');
-            throw new Error(`${method} ${path} failed (${resp.status}): ${text}`);
+            const detail = `${method} ${path} → ${resp.status} ${resp.statusText}${text ? '\n' + text : ''}`;
+            logError(detail);
+            throw new Error(detail);
         }
+
+        log(`${method} ${path} → ${resp.status} OK`);
         return resp.json() as Promise<T>;
+    }
+
+    async ping(): Promise<{ ok: boolean; status: number; detail: string }> {
+        const url = `${this.baseUrl}/api/auth/me`;
+        log(`PING ${url}`);
+        try {
+            const resp = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+            const detail = `${resp.status} ${resp.statusText}`;
+            log(`PING → ${detail}`);
+            return { ok: resp.status === 401 || resp.ok, status: resp.status, detail };
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logError(`PING failed`, err);
+            return { ok: false, status: 0, detail: msg };
+        }
     }
 
     // --- Auth ---
 
     async login(username: string, password: string): Promise<LoginResponse> {
+        log(`Authenticating as "${username}"...`);
         const resp = await this.request<LoginResponse>('POST', '/api/auth/login', { username, password });
         this.token = resp.token;
+        log(`Authenticated: user_id=${resp.user_id}, roles=${resp.roles.join(',')}`);
         return resp;
     }
 
@@ -58,11 +89,14 @@ export class TachikomaClient {
     async logout(): Promise<void> {
         await this.request('POST', '/api/auth/logout');
         this.token = null;
+        log('Logged out');
     }
 
     async refreshToken(): Promise<LoginResponse> {
+        log('Refreshing token...');
         const resp = await this.request<LoginResponse>('POST', '/api/auth/refresh');
         this.token = resp.token;
+        log(`Token refreshed for ${resp.user_id}`);
         return resp;
     }
 

@@ -3,8 +3,11 @@ import { AuthManager } from './auth/authManager';
 import { ContextTreeProvider } from './hierarchy/contextTreeProvider';
 import { CollaborationManager } from './collaborative/collaborationManager';
 import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
+import { log, getOutputChannel } from './log';
 
 export async function activate(context: vscode.ExtensionContext) {
+    log('Tachikoma extension activating...');
+
     const authManager = new AuthManager();
     const contextTree = new ContextTreeProvider();
     const collabManager = new CollaborationManager();
@@ -18,6 +21,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Wire auth events to downstream modules
     authManager.onDidConnect((client) => {
+        log('Auth connected — initializing context tree and collaboration');
         contextTree.setClient(client);
         const userId = authManager.getUserId() ?? 'unknown';
         collabManager.connect(client, userId, userId);
@@ -25,6 +29,7 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     authManager.onDidDisconnect(() => {
+        log('Auth disconnected — cleaning up');
         contextTree.setClient(null);
         collabManager.disconnect();
         collaboratorsProvider.unbind();
@@ -38,6 +43,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
         vscode.commands.registerCommand('tachikoma.disconnect', () => {
             return authManager.disconnect(context);
+        }),
+
+        vscode.commands.registerCommand('tachikoma.showOutput', () => {
+            getOutputChannel().show(true);
         }),
 
         vscode.commands.registerCommand('tachikoma.startCollaborating', () => {
@@ -59,10 +68,12 @@ export async function activate(context: vscode.ExtensionContext) {
     // Auto-connect on startup if configured
     const config = vscode.workspace.getConfiguration('tachikoma');
     if (config.get<boolean>('autoConnect')) {
+        log('Auto-connect enabled, attempting reconnect...');
         void authManager.tryReconnect(context);
     }
 
-    context.subscriptions.push(authManager, collabManager);
+    context.subscriptions.push(authManager, collabManager, getOutputChannel());
+    log('Tachikoma extension activated');
 }
 
 export function deactivate() {}

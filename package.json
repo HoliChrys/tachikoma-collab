@@ -1,9 +1,9 @@
 {
   "name": "tachikoma-collab",
   "displayName": "Tachikoma Collab",
-  "publisher": "tachikoma",
+  "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -35,6 +35,10 @@
       {
         "command": "tachikoma.disconnect",
         "title": "Tachikoma: Disconnect"
+      },
+      {
+        "command": "tachikoma.showOutput",
+        "title": "Tachikoma: Show Logs"
       },
       {
         "command": "tachikoma.startCollaborating",
