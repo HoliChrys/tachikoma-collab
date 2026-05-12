@@ -1,9 +1,21 @@
 {
-  "name": "tachikoma",
-  "displayName": "Tachikoma",
+  "name": "tachikoma-collab",
+  "displayName": "Tachikoma Collab",
   "publisher": "tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HoliChrys/tachikoma-collab"
+  },
+  "keywords": [
+    "collaboration",
+    "live-editing",
+    "crdt",
+    "real-time",
+    "tachikoma"
+  ],
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -82,7 +94,8 @@
     "@types/vscode": "^1.75.1",
     "@types/ws": "^8.18.1",
     "typescript": "^5.9.2",
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "@vscode/vsce": "^3.3.2"
   },
   "dependencies": {
     "yjs": "^13.6.27",
