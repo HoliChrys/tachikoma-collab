@@ -33,6 +33,7 @@ export async function activate(context: vscode.ExtensionContext) {
     authManager.onDidConnect((client) => {
         log('Auth connected — initializing context tree and collaboration');
         contextTree.setClient(client);
+        collaboratorsProvider.setClient(client);
         const userId = authManager.getUserId() ?? 'unknown';
         collabManager.connect(client, userId, userId);
         collaboratorsProvider.bind(collabManager);
@@ -41,6 +42,7 @@ export async function activate(context: vscode.ExtensionContext) {
     authManager.onDidDisconnect(() => {
         log('Auth disconnected — cleaning up');
         contextTree.setClient(null);
+        collaboratorsProvider.setClient(null);
         collabManager.disconnect();
         collaboratorsProvider.unbind();
     });

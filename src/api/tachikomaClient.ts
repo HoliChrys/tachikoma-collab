@@ -101,6 +101,12 @@ export class TachikomaClient {
         return resp;
     }
 
+    // --- Users ---
+
+    async listUsers(): Promise<Array<{ user_id: string; name: string; state: string; user_type: string }>> {
+        return this.request('GET', '/api/users');
+    }
+
     // --- Hierarchy ---
 
     async getGalaxies(): Promise<HierarchyItem[]> {
