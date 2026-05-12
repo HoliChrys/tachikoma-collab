@@ -107,6 +107,10 @@ export class TachikomaClient {
         return this.request('GET', '/api/users');
     }
 
+    async getUserContexts(userId: string): Promise<{ user_id: string; contexts: string[] }> {
+        return this.request('GET', `/api/users/${userId}/contexts`);
+    }
+
     // --- Hierarchy ---
 
     async getGalaxies(): Promise<HierarchyItem[]> {

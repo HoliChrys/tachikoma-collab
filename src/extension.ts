@@ -4,6 +4,7 @@ import { ContextTreeProvider } from './hierarchy/contextTreeProvider';
 import { CollaborationManager } from './collaborative/collaborationManager';
 import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
 import { log, getOutputChannel } from './log';
+import type { ContextNode } from './types';
 
 export async function activate(context: vscode.ExtensionContext) {
     log('Tachikoma extension activating...');
@@ -13,11 +14,22 @@ export async function activate(context: vscode.ExtensionContext) {
     const collabManager = new CollaborationManager();
     const collaboratorsProvider = new CollaboratorsProvider();
 
-    // Register tree views
+    // Register tree views — use createTreeView for context tree to capture selection
+    const contextTreeView = vscode.window.createTreeView('tachikomaContextTree', {
+        treeDataProvider: contextTree,
+    });
     context.subscriptions.push(
-        vscode.window.registerTreeDataProvider('tachikomaContextTree', contextTree),
+        contextTreeView,
         vscode.window.registerTreeDataProvider('tachikomaCollaborators', collaboratorsProvider),
     );
+
+    // When user selects a context, update collaborators for that context
+    contextTreeView.onDidChangeSelection((e) => {
+        const selected = e.selection[0];
+        if (selected && (selected.type === 'galaxy' || selected.type === 'system' || selected.type === 'space')) {
+            collaboratorsProvider.setSelectedContext(selected);
+        }
+    });
 
     // Set monorepo root from config or workspace
     const config = vscode.workspace.getConfiguration('tachikoma');
