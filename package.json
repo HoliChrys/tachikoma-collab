@@ -1,0 +1,94 @@
+{
+  "name": "tachikoma",
+  "displayName": "Tachikoma",
+  "publisher": "tachikoma",
+  "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tachikoma.connect",
+        "title": "Tachikoma: Connect to Computer"
+      },
+      {
+        "command": "tachikoma.disconnect",
+        "title": "Tachikoma: Disconnect"
+      },
+      {
+        "command": "tachikoma.startCollaborating",
+        "title": "Tachikoma: Start Collaborating on File"
+      },
+      {
+        "command": "tachikoma.stopCollaborating",
+        "title": "Tachikoma: Stop Collaborating on File"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tachikomaExplorer",
+          "title": "Tachikoma",
+          "icon": "media/tachikoma-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "tachikomaExplorer": [
+        {
+          "id": "tachikomaContextTree",
+          "name": "Contexts"
+        },
+        {
+          "id": "tachikomaCollaborators",
+          "name": "Collaborators"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Tachikoma",
+      "properties": {
+        "tachikoma.host": {
+          "type": "string",
+          "default": "",
+          "description": "Tachikoma computer address (e.g., http://localhost:8000)"
+        },
+        "tachikoma.autoConnect": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically connect on startup"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "npm run compile -- --watch",
+    "typecheck": "tsc -p ./ --noEmit",
+    "lint": "eslint src",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "22.x",
+    "@types/vscode": "^1.75.1",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.2",
+    "esbuild": "^0.25.0"
+  },
+  "dependencies": {
+    "yjs": "^13.6.27",
+    "y-protocols": "^1.0.6",
+    "ws": "^8.18.2",
+    "eventsource": "^3.0.7",
+    "lib0": "^0.2.103"
+  }
+}
