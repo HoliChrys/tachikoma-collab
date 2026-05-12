@@ -3,6 +3,7 @@ import type {
     LoginResponse,
     UserInfo,
     HierarchyItem,
+    FileEntry,
     ComponentResponse,
     ComponentStateResponse,
 } from '../types';
@@ -123,6 +124,11 @@ export class TachikomaClient {
 
     async getSpaces(): Promise<HierarchyItem[]> {
         return this.request<HierarchyItem[]>('GET', '/api/hierarchy/spaces');
+    }
+
+    async listContextFiles(contextPath: string, subpath: string = ''): Promise<FileEntry[]> {
+        const params = subpath ? `?subpath=${encodeURIComponent(subpath)}` : '';
+        return this.request<FileEntry[]>('GET', `/api/hierarchy/${contextPath}/files${params}`);
     }
 
     // --- Components ---

@@ -31,15 +31,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    // Set monorepo root from config or workspace
     const config = vscode.workspace.getConfiguration('tachikoma');
-    const monorepoRoot = config.get<string>('monorepoRoot')
-        || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-        || '';
-    if (monorepoRoot) {
-        contextTree.setMonorepoRoot(monorepoRoot);
-        log(`Monorepo root: ${monorepoRoot}`);
-    }
 
     // Wire auth events to downstream modules
     authManager.onDidConnect((client) => {

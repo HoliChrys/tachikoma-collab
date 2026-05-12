@@ -69,6 +69,13 @@ export interface HierarchyItem {
     packages: string[];
 }
 
+export interface FileEntry {
+    name: string;
+    type: 'file' | 'directory';
+    path: string;
+    size?: number;
+}
+
 export type TreeNodeType = 'galaxy' | 'system' | 'space' | 'folder' | 'file';
 
 export interface ContextNode {
@@ -77,6 +84,9 @@ export interface ContextNode {
     type: TreeNodeType;
     path: string;
     fsPath?: string;
+    contextPath?: string;
+    subpath?: string;
+    size?: number;
     children?: ContextNode[];
     hive_channel?: string;
 }

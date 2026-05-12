@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import type { TachikomaClient } from '../api/tachikomaClient';
 import type { ContextNode, HierarchyItem } from '../types';
 import { log, logError } from '../log';
@@ -10,7 +9,6 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
 
     private roots: ContextNode[] = [];
     private client: TachikomaClient | null = null;
-    private monorepoRoot = '';
 
     setClient(client: TachikomaClient | null): void {
         this.client = client;
@@ -20,10 +18,6 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
             this.roots = [];
             this._onDidChangeTreeData.fire(undefined);
         }
-    }
-
-    setMonorepoRoot(root: string): void {
-        this.monorepoRoot = root;
     }
 
     async refresh(): Promise<void> {
@@ -77,17 +71,11 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
                     name: sp.name,
                     type: 'space' as const,
                     path: sp.path,
-                    fsPath: this.spaceToFsPath(sp.path),
+                    contextPath: sp.path,
                     hive_channel: sp.hive_channel,
                 })),
             })),
         }));
-    }
-
-    private spaceToFsPath(dottedPath: string): string {
-        if (!this.monorepoRoot) return '';
-        const parts = dottedPath.split('.');
-        return path.join(this.monorepoRoot, ...parts);
     }
 
     getTreeItem(element: ContextNode): vscode.TreeItem {
@@ -107,19 +95,18 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
             file: 'file',
         };
         item.iconPath = new vscode.ThemeIcon(icons[element.type] ?? 'circle-outline');
-        item.tooltip = element.fsPath || element.path;
+        item.tooltip = element.path;
         item.description = element.type === 'galaxy' || element.type === 'system' || element.type === 'space'
             ? element.type
-            : undefined;
+            : element.fsPath ? `${((element as { size?: number }).size ?? 0)} B` : undefined;
         item.contextValue = element.type;
 
-        if (element.type === 'file' && element.fsPath) {
+        if (element.type === 'file') {
             item.command = {
-                command: 'vscode.open',
+                command: 'tachikoma.openRemoteFile',
                 title: 'Open File',
-                arguments: [vscode.Uri.file(element.fsPath)],
+                arguments: [element],
             };
-            item.resourceUri = vscode.Uri.file(element.fsPath);
         }
 
         return item;
@@ -132,39 +119,36 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
             return element.children;
         }
 
-        if ((element.type === 'space' || element.type === 'folder') && element.fsPath) {
-            return this.listDirectory(element.fsPath);
+        // For spaces and folders, list via API
+        if ((element.type === 'space' || element.type === 'folder') && this.client) {
+            return this.listRemoteDirectory(element);
         }
 
         return [];
     }
 
-    private async listDirectory(dirPath: string): Promise<ContextNode[]> {
+    private async listRemoteDirectory(element: ContextNode): Promise<ContextNode[]> {
+        if (!this.client) return [];
+
+        const contextPath = element.contextPath ?? element.path.split('/')[0] ?? element.path;
+        const subpath = element.type === 'folder' ? (element.subpath ?? '') : '';
+
         try {
-            const fs = await import('fs/promises');
-            const entries = await fs.readdir(dirPath, { withFileTypes: true });
-
-            const hidden = new Set(['.git', '.venv', 'node_modules', '__pycache__', '.mypy_cache', '.pytest_cache']);
-            const sorted = entries
-                .filter((e) => !e.name.startsWith('.') || !hidden.has(e.name))
-                .filter((e) => !hidden.has(e.name))
-                .sort((a, b) => {
-                    if (a.isDirectory() && !b.isDirectory()) return -1;
-                    if (!a.isDirectory() && b.isDirectory()) return 1;
-                    return a.name.localeCompare(b.name);
-                });
-
-            return sorted.map((entry) => {
-                const fullPath = path.join(dirPath, entry.name);
-                return {
-                    id: fullPath,
-                    name: entry.name,
-                    type: entry.isDirectory() ? 'folder' as const : 'file' as const,
-                    path: fullPath,
-                    fsPath: fullPath,
-                };
-            });
-        } catch {
+            const entries = await this.client.listContextFiles(contextPath, subpath);
+            return entries.map((e) => ({
+                id: `${contextPath}/${e.path}`,
+                name: e.name,
+                type: e.type === 'directory' ? 'folder' as const : 'file' as const,
+                path: e.path,
+                fsPath: e.path,
+                contextPath,
+                subpath: e.type === 'directory'
+                    ? (subpath ? `${subpath}/${e.name}` : e.name)
+                    : undefined,
+                size: e.size,
+            }));
+        } catch (err) {
+            logError(`Failed to list ${contextPath}/${subpath}`, err);
             return [];
         }
     }
