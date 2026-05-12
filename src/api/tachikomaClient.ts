@@ -128,7 +128,8 @@ export class TachikomaClient {
 
     async listContextFiles(contextPath: string, subpath: string = ''): Promise<FileEntry[]> {
         const params = subpath ? `?subpath=${encodeURIComponent(subpath)}` : '';
-        return this.request<FileEntry[]>('GET', `/api/hierarchy/${contextPath}/files${params}`);
+        const resp = await this.request<{ entries: FileEntry[] }>('GET', `/api/hierarchy/${contextPath}/files${params}`);
+        return resp.entries ?? [];
     }
 
     // --- Components ---
