@@ -57,11 +57,26 @@ export interface ParticipantEvent {
     participant_type?: string;
 }
 
+export interface HierarchyItem {
+    id: string;
+    name: string;
+    level: 'galaxy' | 'system' | 'space';
+    path: string;
+    parent_path: string;
+    owner_id: string;
+    hive_channel: string;
+    tools: string[];
+    packages: string[];
+}
+
+export type TreeNodeType = 'galaxy' | 'system' | 'space' | 'folder' | 'file';
+
 export interface ContextNode {
     id: string;
     name: string;
-    level: 'global' | 'galaxy' | 'system' | 'space';
+    type: TreeNodeType;
     path: string;
+    fsPath?: string;
     children?: ContextNode[];
     hive_channel?: string;
 }

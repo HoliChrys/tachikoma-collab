@@ -19,6 +19,16 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('tachikomaCollaborators', collaboratorsProvider),
     );
 
+    // Set monorepo root from config or workspace
+    const config = vscode.workspace.getConfiguration('tachikoma');
+    const monorepoRoot = config.get<string>('monorepoRoot')
+        || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+        || '';
+    if (monorepoRoot) {
+        contextTree.setMonorepoRoot(monorepoRoot);
+        log(`Monorepo root: ${monorepoRoot}`);
+    }
+
     // Wire auth events to downstream modules
     authManager.onDidConnect((client) => {
         log('Auth connected — initializing context tree and collaboration');
@@ -66,7 +76,6 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Auto-connect on startup if configured
-    const config = vscode.workspace.getConfiguration('tachikoma');
     if (config.get<boolean>('autoConnect')) {
         log('Auto-connect enabled, attempting reconnect...');
         void authManager.tryReconnect(context);

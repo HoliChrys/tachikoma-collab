@@ -2,6 +2,7 @@ import { log, logError } from '../log';
 import type {
     LoginResponse,
     UserInfo,
+    HierarchyItem,
     ComponentResponse,
     ComponentStateResponse,
 } from '../types';
@@ -102,8 +103,16 @@ export class TachikomaClient {
 
     // --- Hierarchy ---
 
-    async getHierarchy(): Promise<unknown> {
-        return this.request('GET', '/api/hierarchy/galaxies');
+    async getGalaxies(): Promise<HierarchyItem[]> {
+        return this.request<HierarchyItem[]>('GET', '/api/hierarchy/galaxies');
+    }
+
+    async getSystems(): Promise<HierarchyItem[]> {
+        return this.request<HierarchyItem[]>('GET', '/api/hierarchy/systems');
+    }
+
+    async getSpaces(): Promise<HierarchyItem[]> {
+        return this.request<HierarchyItem[]>('GET', '/api/hierarchy/spaces');
     }
 
     // --- Components ---
