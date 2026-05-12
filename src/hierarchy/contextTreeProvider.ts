@@ -138,11 +138,11 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
             return entries.map((e) => ({
                 id: `${contextPath}/${e.path}`,
                 name: e.name,
-                type: e.type === 'directory' ? 'folder' as const : 'file' as const,
+                type: (e.type === 'directory' || e.type === 'dir') ? 'folder' as const : 'file' as const,
                 path: e.path,
                 fsPath: e.path,
                 contextPath,
-                subpath: e.type === 'directory'
+                subpath: (e.type === 'directory' || e.type === 'dir')
                     ? (subpath ? `${subpath}/${e.name}` : e.name)
                     : undefined,
                 size: e.size,

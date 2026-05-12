@@ -71,7 +71,7 @@ export interface HierarchyItem {
 
 export interface FileEntry {
     name: string;
-    type: 'file' | 'directory';
+    type: 'file' | 'directory' | 'dir';
     path: string;
     size?: number;
 }
