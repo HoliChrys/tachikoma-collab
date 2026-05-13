@@ -38,14 +38,24 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
             file: 'file',
         };
 
-        // Active contexts get a green highlight
         const isCtx = element.type === 'galaxy' || element.type === 'system' || element.type === 'space';
         const isActive = isCtx && this.store?.isActive(element.path);
+
+        const contextColors: Record<string, string> = {
+            galaxy: 'charts.purple',
+            system: 'charts.blue',
+            space: 'charts.pink',
+        };
 
         if (isActive) {
             item.iconPath = new vscode.ThemeIcon(
                 icons[element.type] ?? 'circle-outline',
                 new vscode.ThemeColor('charts.green'),
+            );
+        } else if (contextColors[element.type]) {
+            item.iconPath = new vscode.ThemeIcon(
+                icons[element.type] ?? 'circle-outline',
+                new vscode.ThemeColor(contextColors[element.type]),
             );
         } else {
             item.iconPath = new vscode.ThemeIcon(icons[element.type] ?? 'circle-outline');
