@@ -137,6 +137,10 @@ export class TachikomaClient {
         return resp.content;
     }
 
+    async writeFile(contextPath: string, filePath: string, content: string): Promise<void> {
+        await this.request('PUT', `/api/hierarchy/${contextPath}/file?path=${encodeURIComponent(filePath)}`, { content });
+    }
+
     // --- Components ---
 
     async listComponents(sessionId?: string, componentType?: string): Promise<{ components: ComponentResponse[]; total: number }> {

@@ -16,9 +16,11 @@ export async function activate(context: vscode.ExtensionContext) {
     const collabManager = new CollaborationManager();
     const collaboratorsProvider = new CollaboratorsProvider();
 
-    // Register tachikoma:// URI scheme for remote file viewing
+    // Register tachikoma:// filesystem for remote file read/write
     context.subscriptions.push(
-        vscode.workspace.registerTextDocumentContentProvider(TACHIKOMA_SCHEME, remoteFileProvider),
+        vscode.workspace.registerFileSystemProvider(TACHIKOMA_SCHEME, remoteFileProvider, {
+            isCaseSensitive: true,
+        }),
     );
 
     // Register tree views
