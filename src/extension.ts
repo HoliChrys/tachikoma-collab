@@ -48,12 +48,20 @@ export async function activate(context: vscode.ExtensionContext) {
         return uri.authority;
     }
 
+    const config = vscode.workspace.getConfiguration('tachikoma');
+
     context.subscriptions.push(
         vscode.workspace.onDidOpenTextDocument((doc) => {
             const ctx = contextFromUri(doc.uri);
             if (ctx) {
                 store.activateContext(ctx);
                 log(`Context activated: ${ctx}`);
+                // Auto-start live collaboration for tachikoma:// files
+                if (config.get<boolean>('autoCollab', true)) {
+                    void collabManager.startCollaborating(doc).catch((err) => {
+                        log(`Auto-collab failed for ${doc.uri.toString()}: ${err}`);
+                    });
+                }
             }
         }),
         vscode.workspace.onDidCloseTextDocument((doc) => {
@@ -61,11 +69,12 @@ export async function activate(context: vscode.ExtensionContext) {
             if (ctx) {
                 store.deactivateContext(ctx);
                 log(`Context deactivated: ${ctx}`);
+                if (config.get<boolean>('autoCollab', true)) {
+                    void collabManager.stopCollaborating(doc).catch(() => {});
+                }
             }
         }),
     );
-
-    const config = vscode.workspace.getConfiguration('tachikoma');
 
     authManager.onDidConnect(async (client) => {
         log('Auth connected — initializing store');

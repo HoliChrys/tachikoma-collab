@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -132,6 +132,11 @@
           "type": "boolean",
           "default": false,
           "description": "Show sessions from all contexts (not just active ones)"
+        },
+        "tachikoma.autoCollab": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start live collaboration (CRDT + presence) when opening remote files"
         }
       }
     }
