@@ -32,13 +32,40 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('tachikomaCollaborators', collaboratorsProvider),
     );
 
-    // When user selects a context, update collaborators for that context
+    // When user selects a context in tree, update collaborators
     contextTreeView.onDidChangeSelection((e) => {
         const selected = e.selection[0];
         if (selected && (selected.type === 'galaxy' || selected.type === 'system' || selected.type === 'space')) {
             collaboratorsProvider.setSelectedContext(selected);
         }
     });
+
+    // When active editor changes, detect context from tachikoma:// URI
+    function updateContextFromEditor(editor: vscode.TextEditor | undefined): void {
+        if (!editor) return;
+        const uri = editor.document.uri;
+        if (uri.scheme !== TACHIKOMA_SCHEME) return;
+
+        const contextPath = uri.authority; // e.g. "tachikoma.paralelle.sdk"
+        const parts = contextPath.split('.');
+        // Extract space-level context (3 parts: galaxy.system.space)
+        const spacePath = parts.length >= 3 ? parts.slice(0, 3).join('.') : contextPath;
+        const spaceName = parts.length >= 3 ? parts[2] : parts[parts.length - 1];
+
+        collaboratorsProvider.setSelectedContext({
+            id: spacePath,
+            name: spaceName,
+            type: 'space',
+            path: spacePath,
+            contextPath: spacePath,
+        });
+    }
+
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(updateContextFromEditor),
+    );
+    // Set initial context from current editor
+    updateContextFromEditor(vscode.window.activeTextEditor);
 
     const config = vscode.workspace.getConfiguration('tachikoma');
 
