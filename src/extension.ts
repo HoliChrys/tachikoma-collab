@@ -5,6 +5,8 @@ import { ContextTreeProvider } from './hierarchy/contextTreeProvider';
 import { RemoteFileProvider, TACHIKOMA_SCHEME, buildFileUri } from './hierarchy/remoteFileProvider';
 import { CollaborationManager } from './collaborative/collaborationManager';
 import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
+import { SessionsProvider, type SessionEntry, type ZellijEntry } from './sessions/sessionsProvider';
+import { attachTmux, openZellij } from './sessions/sessionAttacher';
 import { log, getOutputChannel } from './log';
 import type { ContextNode } from './types';
 
@@ -17,10 +19,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const remoteFileProvider = new RemoteFileProvider();
     const collabManager = new CollaborationManager();
     const collaboratorsProvider = new CollaboratorsProvider();
+    const sessionsProvider = new SessionsProvider();
 
     // Wire store to views
     contextTree.setStore(store);
     collaboratorsProvider.setStore(store);
+    sessionsProvider.setStore(store);
 
     // Register tachikoma:// filesystem
     context.subscriptions.push(
@@ -36,13 +40,14 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         contextTreeView,
         vscode.window.registerTreeDataProvider('tachikomaCollaborators', collaboratorsProvider),
+        vscode.window.registerTreeDataProvider('tachikomaSessions', sessionsProvider),
     );
 
     // --- Buffer tracking: activate/deactivate contexts ---
 
     function contextFromUri(uri: vscode.Uri): string | undefined {
         if (uri.scheme !== TACHIKOMA_SCHEME) return undefined;
-        return uri.authority; // e.g. "tachikoma.paralelle.sdk"
+        return uri.authority;
     }
 
     context.subscriptions.push(
@@ -71,6 +76,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         contextTree.setClient(client);
         remoteFileProvider.setClient(client);
+        sessionsProvider.setClient(client);
         await store.init(client, userId);
 
         collabManager.connect(client, userId, userId);
@@ -80,6 +86,7 @@ export async function activate(context: vscode.ExtensionContext) {
         log('Auth disconnected — cleaning up');
         contextTree.setClient(null);
         remoteFileProvider.setClient(null);
+        sessionsProvider.setClient(null);
         collabManager.disconnect();
     });
 
@@ -113,14 +120,70 @@ export async function activate(context: vscode.ExtensionContext) {
             if (!editor) return;
             return collabManager.stopCollaborating(editor.document);
         }),
+        vscode.commands.registerCommand('tachikoma.attachSession', async (node: SessionEntry | ZellijEntry) => {
+            const hostUrl = config.get<string>('host') ?? '';
+            if (!hostUrl) {
+                vscode.window.showErrorMessage('tachikoma.host setting not configured');
+                return;
+            }
+            const sshUser = authManager.getUserId() ?? 'ubuntu';
+
+            if (node.kind === 'session' && node.sessionType === 'tmux' && node.tmuxTarget) {
+                attachTmux({
+                    hostUrl,
+                    sshUser,
+                    ctxId: node.parentCtxId,
+                    tmuxTarget: node.tmuxTarget,
+                    tmuxSocket: node.tmuxSocket,
+                });
+            } else if (node.kind === 'zellij') {
+                const client = authManager.getClient();
+                if (!client) return;
+                try {
+                    const info = await client.getSessionWebInfo(node.contextPath || node.parentCtxId);
+                    await openZellij(info);
+                } catch (err) {
+                    vscode.window.showErrorMessage(`Failed to open Zellij: ${err}`);
+                }
+            } else if (node.kind === 'session' && node.sessionType === 'zellij') {
+                // Zellij session entry from active_sessions list
+                const client = authManager.getClient();
+                if (!client) return;
+                try {
+                    const info = await client.getSessionWebInfo(node.parentCtxId);
+                    await openZellij(info);
+                } catch (err) {
+                    vscode.window.showErrorMessage(`Failed to open Zellij: ${err}`);
+                }
+            }
+        }),
+        vscode.commands.registerCommand('tachikoma.openZellij', async (node: ZellijEntry) => {
+            const client = authManager.getClient();
+            if (!client) return;
+            try {
+                const info = await client.getSessionWebInfo(node.contextPath || node.parentCtxId);
+                await openZellij(info);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to open Zellij: ${err}`);
+            }
+        }),
+        vscode.commands.registerCommand('tachikoma.refreshSessions', () => sessionsProvider.refresh()),
+        vscode.commands.registerCommand('tachikoma.toggleShowAllSessions', () => {
+            const cfg = vscode.workspace.getConfiguration('tachikoma');
+            const current = cfg.get<boolean>('showAllSessions') ?? false;
+            void cfg.update('showAllSessions', !current, vscode.ConfigurationTarget.Global);
+            sessionsProvider.setShowAll(!current);
+        }),
     );
+
+    sessionsProvider.setShowAll(config.get<boolean>('showAllSessions') ?? false);
 
     if (config.get<boolean>('autoConnect')) {
         log('Auto-connect enabled, attempting reconnect...');
         void authManager.tryReconnect(context);
     }
 
-    context.subscriptions.push(authManager, store, collabManager, getOutputChannel());
+    context.subscriptions.push(authManager, store, collabManager, sessionsProvider, getOutputChannel());
     log('Tachikoma extension activated');
 }
 

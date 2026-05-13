@@ -7,6 +7,11 @@ import type {
     ComponentResponse,
     ComponentStateResponse,
 } from '../types';
+import type {
+    TmuxSessionInfo,
+    ContextSessionGroup,
+    ZellijWebInfo,
+} from '../sessions/sessionTypes';
 
 export class TachikomaClient {
     readonly baseUrl: string;
@@ -139,6 +144,22 @@ export class TachikomaClient {
 
     async writeFile(contextPath: string, filePath: string, content: string): Promise<void> {
         await this.request('PUT', `/api/hierarchy/${contextPath}/file?path=${encodeURIComponent(filePath)}`, { content });
+    }
+
+    // --- Sessions ---
+
+    async listSessionsByContext(): Promise<{ groups: ContextSessionGroup[]; total_active: number; total_exited: number }> {
+        return this.request('GET', '/api/sessions/by-context');
+    }
+
+    async listTmuxSessions(ctxId?: string): Promise<{ sessions: TmuxSessionInfo[] }> {
+        const qs = ctxId ? `?ctx_id=${encodeURIComponent(ctxId)}` : '';
+        return this.request('GET', `/api/sessions/tmux${qs}`);
+    }
+
+    async getSessionWebInfo(contextPath: string): Promise<ZellijWebInfo> {
+        const qs = contextPath ? `?context_path=${encodeURIComponent(contextPath)}` : '';
+        return this.request('GET', `/api/sessions/web-info${qs}`);
     }
 
     // --- Components ---

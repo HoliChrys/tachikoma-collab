@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -47,8 +47,40 @@
       {
         "command": "tachikoma.stopCollaborating",
         "title": "Tachikoma: Stop Collaborating on File"
+      },
+      {
+        "command": "tachikoma.attachSession",
+        "title": "Tachikoma: Attach Session"
+      },
+      {
+        "command": "tachikoma.openZellij",
+        "title": "Tachikoma: Open Zellij Web"
+      },
+      {
+        "command": "tachikoma.refreshSessions",
+        "title": "Tachikoma: Refresh Sessions",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "tachikoma.toggleShowAllSessions",
+        "title": "Tachikoma: Toggle Show All Sessions",
+        "icon": "$(filter)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "tachikoma.refreshSessions",
+          "when": "view == tachikomaSessions",
+          "group": "navigation"
+        },
+        {
+          "command": "tachikoma.toggleShowAllSessions",
+          "when": "view == tachikomaSessions",
+          "group": "navigation"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -67,6 +99,10 @@
         {
           "id": "tachikomaCollaborators",
           "name": "Collaborators"
+        },
+        {
+          "id": "tachikomaSessions",
+          "name": "Sessions"
         }
       ]
     },
@@ -87,6 +123,11 @@
           "type": "string",
           "default": "",
           "description": "Path to the tachikoma monorepo root on the remote computer (e.g., /home/ubuntu/tachikoma_monorepo)"
+        },
+        "tachikoma.showAllSessions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show sessions from all contexts (not just active ones)"
         }
       }
     }
