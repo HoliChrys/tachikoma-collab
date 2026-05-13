@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -65,6 +65,10 @@
         "command": "tachikoma.toggleShowAllSessions",
         "title": "Tachikoma: Toggle Show All Sessions",
         "icon": "$(filter)"
+      },
+      {
+        "command": "tachikoma.invalidateCache",
+        "title": "Tachikoma: Invalidate Cache and Resync"
       }
     ],
     "menus": {

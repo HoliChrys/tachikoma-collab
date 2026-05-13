@@ -202,6 +202,20 @@ export class AuthManager implements vscode.Disposable {
         }
     }
 
+    private syncStateLabel: string = '';
+
+    setSyncState(state: 'disconnected' | 'hydrating' | 'syncing' | 'synced' | 'stale'): void {
+        const labels: Record<string, string> = {
+            disconnected: '',
+            hydrating: '$(loading~spin) hydrating',
+            syncing: '$(sync~spin) syncing',
+            synced: '$(check) synced',
+            stale: '$(warning) stale',
+        };
+        this.syncStateLabel = labels[state] ?? '';
+        this.updateStatusBar();
+    }
+
     private updateStatusBar(state?: string, host?: string): void {
         if (state === 'connecting') {
             this.statusBarItem.text = '$(loading~spin) Tachikoma: Connecting...';
@@ -209,7 +223,8 @@ export class AuthManager implements vscode.Disposable {
             return;
         }
         if (this.isConnected()) {
-            this.statusBarItem.text = `$(plug) Tachikoma: ${this.userId}`;
+            const sync = this.syncStateLabel ? ` · ${this.syncStateLabel}` : '';
+            this.statusBarItem.text = `$(plug) Tachikoma: ${this.userId}${sync}`;
             this.statusBarItem.tooltip = `Connected to ${this.hostUrl} as ${this.userId}\nClick to reconnect`;
             this.statusBarItem.backgroundColor = undefined;
         } else {

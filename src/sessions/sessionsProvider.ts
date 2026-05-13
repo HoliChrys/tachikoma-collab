@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { TachikomaClient } from '../api/tachikomaClient';
 import type { ContextStore } from '../store/contextStore';
-import { log, logError } from '../log';
+import { log } from '../log';
 import type { ContextSessionGroup, TmuxSessionInfo, ZellijSessionInfo } from './sessionTypes';
 
 interface ContextNode {
@@ -32,7 +32,7 @@ interface ZellijEntry {
     port: number;
 }
 
-interface EmptyEntry { kind: 'empty'; label: string }
+interface EmptyEntry { kind: 'empty'; label: string; description?: string }
 
 type SessionNode = ContextNode | SessionEntry | ZellijEntry | EmptyEntry;
 
@@ -42,22 +42,12 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
 
     private client: TachikomaClient | null = null;
     private store: ContextStore | null = null;
-    private groups: ContextSessionGroup[] = [];
-    private tmuxByCtx = new Map<string, TmuxSessionInfo[]>();
-    private showAll = false;
-    private refreshTimer: ReturnType<typeof setInterval> | null = null;
+    private connected = false;
 
     setClient(client: TachikomaClient | null): void {
         this.client = client;
-        if (client) {
-            void this.refresh();
-            this.refreshTimer = setInterval(() => void this.refresh(), 15_000);
-        } else {
-            this.groups = [];
-            this.tmuxByCtx.clear();
-            if (this.refreshTimer) { clearInterval(this.refreshTimer); this.refreshTimer = null; }
-            this._onDidChangeTreeData.fire(undefined);
-        }
+        this.connected = !!client;
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     setStore(store: ContextStore): void {
@@ -65,28 +55,8 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
         store.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
     }
 
-    setShowAll(showAll: boolean): void {
-        this.showAll = showAll;
-        this._onDidChangeTreeData.fire(undefined);
-    }
-
-    async refresh(): Promise<void> {
-        if (!this.client) return;
-        try {
-            const resp = await this.client.listSessionsByContext();
-            this.groups = resp.groups ?? [];
-
-            const tmuxResp = await this.client.listTmuxSessions();
-            this.tmuxByCtx.clear();
-            for (const t of (tmuxResp.sessions ?? [])) {
-                const list = this.tmuxByCtx.get(t.ctx_id) ?? [];
-                list.push(t);
-                this.tmuxByCtx.set(t.ctx_id, list);
-            }
-            log(`Sessions: ${this.groups.length} ctxs, ${tmuxResp.sessions?.length ?? 0} tmux`);
-        } catch (err) {
-            logError('Failed to load sessions', err);
-        }
+    /** No-op now: refresh is driven by SSE events on the ContextStore. */
+    refresh(): void {
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -94,6 +64,7 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
         if (element.kind === 'empty') {
             const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
             item.iconPath = new vscode.ThemeIcon('info');
+            item.description = element.description;
             return item;
         }
 
@@ -107,9 +78,10 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
                 element.isActive ? new vscode.ThemeColor('charts.green') : undefined,
             );
             const count = element.sessions.length;
+            const activeTag = element.isActive ? '· active' : '';
             item.description = element.zwebAvailable
-                ? `${count} session${count !== 1 ? 's' : ''} · zweb:${element.zwebPort}`
-                : `${count} session${count !== 1 ? 's' : ''}`;
+                ? `${count} · zweb:${element.zwebPort} ${activeTag}`.trim()
+                : `${count} ${activeTag}`.trim();
             item.contextValue = 'sessionContext';
             return item;
         }
@@ -128,7 +100,7 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
         }
 
         // zellij entry
-        const item = new vscode.TreeItem(`Zellij Web`, vscode.TreeItemCollapsibleState.None);
+        const item = new vscode.TreeItem('Zellij Web', vscode.TreeItemCollapsibleState.None);
         item.iconPath = new vscode.ThemeIcon('browser');
         item.description = `port ${element.port}`;
         item.contextValue = 'zellijWeb';
@@ -141,7 +113,9 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
     }
 
     getChildren(element?: SessionNode): SessionNode[] {
-        if (!this.client) return [];
+        if (!this.connected) {
+            return [{ kind: 'empty', label: 'Not connected', description: 'Run "Tachikoma: Connect" to load sessions' }];
+        }
 
         if (!element) {
             return this.buildContextNodes();
@@ -155,27 +129,37 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
     }
 
     private buildContextNodes(): SessionNode[] {
-        const activeCtxs = this.store?.getActiveContextPaths() ?? [];
-        const activeSet = new Set(activeCtxs);
+        if (!this.store) return [];
 
-        // Build context nodes from groups + tmux sessions
+        const groups: ContextSessionGroup[] = this.store.getSessions();
+        const tmuxSessions: TmuxSessionInfo[] = this.store.getTmuxSessions();
+        const activeCtxs = new Set(this.store.getActiveContextPaths());
+
+        const tmuxByCtx = new Map<string, TmuxSessionInfo[]>();
+        for (const t of tmuxSessions) {
+            const list = tmuxByCtx.get(t.ctx_id) ?? [];
+            list.push(t);
+            tmuxByCtx.set(t.ctx_id, list);
+        }
+
         const ctxMap = new Map<string, ContextNode>();
 
-        for (const g of this.groups) {
+        for (const g of groups) {
             const ctxId = g.ctx_id || g.context_path || 'global';
-            ctxMap.set(ctxId, {
+            const node: ContextNode = {
                 kind: 'context',
                 ctxId,
                 contextPath: g.context_path,
-                isActive: activeSet.has(ctxId),
+                isActive: activeCtxs.has(ctxId),
                 zwebAvailable: g.zweb_available,
                 zwebPort: g.zweb_port,
                 sessions: [],
-            });
+            };
+            ctxMap.set(ctxId, node);
 
             if (g.zweb_available) {
-                ctxMap.get(ctxId)!.sessions.push({
-                    kind: 'zellij' as const,
+                node.sessions.push({
+                    kind: 'zellij',
                     parentCtxId: ctxId,
                     contextPath: g.context_path,
                     port: g.zweb_port,
@@ -183,7 +167,7 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
             }
 
             for (const s of g.active_sessions ?? []) {
-                ctxMap.get(ctxId)!.sessions.push({
+                node.sessions.push({
                     kind: 'session',
                     parentCtxId: ctxId,
                     sessionId: s.id,
@@ -193,14 +177,14 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
             }
         }
 
-        for (const [ctxId, tmuxList] of this.tmuxByCtx) {
+        for (const [ctxId, tmuxList] of tmuxByCtx) {
             let node = ctxMap.get(ctxId);
             if (!node) {
                 node = {
                     kind: 'context',
                     ctxId,
                     contextPath: ctxId,
-                    isActive: activeSet.has(ctxId),
+                    isActive: activeCtxs.has(ctxId),
                     zwebAvailable: false,
                     zwebPort: 0,
                     sessions: [],
@@ -222,26 +206,20 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
 
         const nodes = [...ctxMap.values()];
 
-        // Filter: only active contexts unless showAll
-        const filtered = this.showAll
-            ? nodes
-            : nodes.filter((n) => n.isActive || n.ctxId === 'global');
-
-        if (filtered.length === 0) {
-            return [{ kind: 'empty', label: this.showAll ? 'No sessions' : 'Open a file to see sessions' }];
+        if (nodes.length === 0) {
+            return [{ kind: 'empty', label: 'No sessions yet', description: 'Sessions appear when tmux or zellij starts in a context' }];
         }
 
-        // Active first, then alpha
-        filtered.sort((a, b) => {
+        // Active first, then alphabetical
+        nodes.sort((a, b) => {
             if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
             return a.ctxId.localeCompare(b.ctxId);
         });
 
-        return filtered;
+        return nodes;
     }
 
     dispose(): void {
-        if (this.refreshTimer) clearInterval(this.refreshTimer);
         this._onDidChangeTreeData.dispose();
     }
 }

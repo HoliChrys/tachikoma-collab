@@ -14,26 +14,26 @@ export async function activate(context: vscode.ExtensionContext) {
     log('Tachikoma extension activating...');
 
     const authManager = new AuthManager();
-    const store = new ContextStore();
+    const store = new ContextStore(context.globalState);
     const contextTree = new ContextTreeProvider();
     const remoteFileProvider = new RemoteFileProvider();
     const collabManager = new CollaborationManager();
     const collaboratorsProvider = new CollaboratorsProvider();
     const sessionsProvider = new SessionsProvider();
 
-    // Wire store to views
     contextTree.setStore(store);
     collaboratorsProvider.setStore(store);
     sessionsProvider.setStore(store);
 
-    // Register tachikoma:// filesystem
+    // Reflect store sync state in the status bar
+    store.onSyncStateChanged((s) => authManager.setSyncState(s));
+
     context.subscriptions.push(
         vscode.workspace.registerFileSystemProvider(TACHIKOMA_SCHEME, remoteFileProvider, {
             isCaseSensitive: true,
         }),
     );
 
-    // Register tree views
     const contextTreeView = vscode.window.createTreeView('tachikomaContextTree', {
         treeDataProvider: contextTree,
     });
@@ -42,8 +42,6 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('tachikomaCollaborators', collaboratorsProvider),
         vscode.window.registerTreeDataProvider('tachikomaSessions', sessionsProvider),
     );
-
-    // --- Buffer tracking: activate/deactivate contexts ---
 
     function contextFromUri(uri: vscode.Uri): string | undefined {
         if (uri.scheme !== TACHIKOMA_SCHEME) return undefined;
@@ -69,7 +67,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const config = vscode.workspace.getConfiguration('tachikoma');
 
-    // Wire auth events
     authManager.onDidConnect(async (client) => {
         log('Auth connected — initializing store');
         const userId = authManager.getUserId() ?? 'unknown';
@@ -77,9 +74,9 @@ export async function activate(context: vscode.ExtensionContext) {
         contextTree.setClient(client);
         remoteFileProvider.setClient(client);
         sessionsProvider.setClient(client);
-        await store.init(client, userId);
-
         collabManager.connect(client, userId, userId);
+
+        await store.init(client, userId);
     });
 
     authManager.onDidDisconnect(() => {
@@ -90,7 +87,6 @@ export async function activate(context: vscode.ExtensionContext) {
         collabManager.disconnect();
     });
 
-    // Commands
     context.subscriptions.push(
         vscode.commands.registerCommand('tachikoma.connect', () => {
             return authManager.connect(context);
@@ -146,7 +142,6 @@ export async function activate(context: vscode.ExtensionContext) {
                     vscode.window.showErrorMessage(`Failed to open Zellij: ${err}`);
                 }
             } else if (node.kind === 'session' && node.sessionType === 'zellij') {
-                // Zellij session entry from active_sessions list
                 const client = authManager.getClient();
                 if (!client) return;
                 try {
@@ -167,16 +162,14 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage(`Failed to open Zellij: ${err}`);
             }
         }),
-        vscode.commands.registerCommand('tachikoma.refreshSessions', () => sessionsProvider.refresh()),
-        vscode.commands.registerCommand('tachikoma.toggleShowAllSessions', () => {
-            const cfg = vscode.workspace.getConfiguration('tachikoma');
-            const current = cfg.get<boolean>('showAllSessions') ?? false;
-            void cfg.update('showAllSessions', !current, vscode.ConfigurationTarget.Global);
-            sessionsProvider.setShowAll(!current);
+        vscode.commands.registerCommand('tachikoma.refreshSessions', () => {
+            sessionsProvider.refresh();
+        }),
+        vscode.commands.registerCommand('tachikoma.invalidateCache', async () => {
+            await store.invalidateCache();
+            vscode.window.showInformationMessage('Tachikoma cache invalidated and resynced');
         }),
     );
-
-    sessionsProvider.setShowAll(config.get<boolean>('showAllSessions') ?? false);
 
     if (config.get<boolean>('autoConnect')) {
         log('Auto-connect enabled, attempting reconnect...');
