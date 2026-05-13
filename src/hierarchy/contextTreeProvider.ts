@@ -1,81 +1,24 @@
 import * as vscode from 'vscode';
 import type { TachikomaClient } from '../api/tachikomaClient';
-import type { ContextNode, HierarchyItem } from '../types';
-import { log, logError } from '../log';
+import type { ContextStore } from '../store/contextStore';
+import type { ContextNode, ContextStoreNode } from '../types';
+import { logError } from '../log';
 
 export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode> {
     private _onDidChangeTreeData = new vscode.EventEmitter<ContextNode | undefined>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    private roots: ContextNode[] = [];
+    private store: ContextStore | null = null;
     private client: TachikomaClient | null = null;
+
+    setStore(store: ContextStore): void {
+        this.store = store;
+        store.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+    }
 
     setClient(client: TachikomaClient | null): void {
         this.client = client;
-        if (client) {
-            void this.refresh();
-        } else {
-            this.roots = [];
-            this._onDidChangeTreeData.fire(undefined);
-        }
-    }
-
-    async refresh(): Promise<void> {
-        if (!this.client) return;
-        try {
-            log('Loading context hierarchy...');
-            const [galaxies, systems, spaces] = await Promise.all([
-                this.client.getGalaxies(),
-                this.client.getSystems(),
-                this.client.getSpaces(),
-            ]);
-
-            this.roots = this.buildTree(galaxies, systems, spaces);
-            log(`Loaded ${galaxies.length} galaxies, ${systems.length} systems, ${spaces.length} spaces`);
-        } catch (err) {
-            logError('Failed to load hierarchy', err);
-            this.roots = [];
-        }
-        this._onDidChangeTreeData.fire(undefined);
-    }
-
-    private buildTree(galaxies: HierarchyItem[], systems: HierarchyItem[], spaces: HierarchyItem[]): ContextNode[] {
-        const systemsByParent = new Map<string, HierarchyItem[]>();
-        for (const s of systems) {
-            const list = systemsByParent.get(s.parent_path) ?? [];
-            list.push(s);
-            systemsByParent.set(s.parent_path, list);
-        }
-
-        const spacesByParent = new Map<string, HierarchyItem[]>();
-        for (const s of spaces) {
-            const list = spacesByParent.get(s.parent_path) ?? [];
-            list.push(s);
-            spacesByParent.set(s.parent_path, list);
-        }
-
-        return galaxies.map((g) => ({
-            id: g.id,
-            name: g.name,
-            type: 'galaxy' as const,
-            path: g.path,
-            hive_channel: g.hive_channel,
-            children: (systemsByParent.get(g.path) ?? []).map((sys) => ({
-                id: sys.id,
-                name: sys.name,
-                type: 'system' as const,
-                path: sys.path,
-                hive_channel: sys.hive_channel,
-                children: (spacesByParent.get(sys.path) ?? []).map((sp) => ({
-                    id: sp.id,
-                    name: sp.name,
-                    type: 'space' as const,
-                    path: sp.path,
-                    contextPath: sp.path,
-                    hive_channel: sp.hive_channel,
-                })),
-            })),
-        }));
+        if (!client) this._onDidChangeTreeData.fire(undefined);
     }
 
     getTreeItem(element: ContextNode): vscode.TreeItem {
@@ -94,11 +37,30 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
             folder: 'folder',
             file: 'file',
         };
-        item.iconPath = new vscode.ThemeIcon(icons[element.type] ?? 'circle-outline');
+
+        // Active contexts get a green highlight
+        const isCtx = element.type === 'galaxy' || element.type === 'system' || element.type === 'space';
+        const isActive = isCtx && this.store?.isActive(element.path);
+
+        if (isActive) {
+            item.iconPath = new vscode.ThemeIcon(
+                icons[element.type] ?? 'circle-outline',
+                new vscode.ThemeColor('charts.green'),
+            );
+        } else {
+            item.iconPath = new vscode.ThemeIcon(icons[element.type] ?? 'circle-outline');
+        }
+
         item.tooltip = element.path;
-        item.description = element.type === 'galaxy' || element.type === 'system' || element.type === 'space'
-            ? element.type
-            : element.fsPath ? `${((element as { size?: number }).size ?? 0)} B` : undefined;
+
+        if (isCtx) {
+            const node = this.store?.getNode(element.path);
+            const activeCount = node?.activeUsers.size ?? 0;
+            item.description = activeCount > 0
+                ? `${element.type} · ${activeCount} active`
+                : element.type;
+        }
+
         item.contextValue = element.type;
 
         if (element.type === 'file') {
@@ -113,13 +75,19 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
     }
 
     async getChildren(element?: ContextNode): Promise<ContextNode[]> {
-        if (!element) return this.roots;
+        if (!this.store) return [];
 
-        if (element.children && element.children.length > 0) {
-            return element.children;
+        // Root: galaxies
+        if (!element) {
+            return this.store.getRoots().map(storeNodeToContextNode);
         }
 
-        // For spaces and folders, list via API
+        // Context nodes: children from store
+        if (element.type === 'galaxy' || element.type === 'system') {
+            return this.store.getChildren(element.path).map(storeNodeToContextNode);
+        }
+
+        // Spaces + folders: list files via API
         if ((element.type === 'space' || element.type === 'folder') && this.client) {
             return this.listRemoteDirectory(element);
         }
@@ -129,8 +97,7 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
 
     private async listRemoteDirectory(element: ContextNode): Promise<ContextNode[]> {
         if (!this.client) return [];
-
-        const contextPath = element.contextPath ?? element.path.split('/')[0] ?? element.path;
+        const contextPath = element.contextPath ?? element.path;
         const subpath = element.type === 'folder' ? (element.subpath ?? '') : '';
 
         try {
@@ -152,4 +119,15 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
             return [];
         }
     }
+}
+
+function storeNodeToContextNode(n: ContextStoreNode): ContextNode {
+    return {
+        id: n.path,
+        name: n.name,
+        type: n.type,
+        path: n.path,
+        contextPath: n.path,
+        hive_channel: n.hive_channel,
+    };
 }

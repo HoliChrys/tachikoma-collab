@@ -91,6 +91,26 @@ export interface ContextNode {
     hive_channel?: string;
 }
 
+export interface ContextStoreNode {
+    path: string;
+    name: string;
+    type: 'galaxy' | 'system' | 'space';
+    parentPath: string;
+    hive_channel: string;
+    active: boolean;
+    activeUsers: Set<string>;
+    grantedUsers: Set<string>;
+    children: string[];
+}
+
+export interface UserRecord {
+    user_id: string;
+    name: string;
+    state: string;
+    user_type: string;
+    contexts: string[];
+}
+
 export interface AwarenessState {
     user: { id: string; name: string; color: string };
     cursor: { line: number; character: number } | null;
