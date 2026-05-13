@@ -132,6 +132,11 @@ export class TachikomaClient {
         return resp.entries ?? [];
     }
 
+    async readFile(contextPath: string, filePath: string): Promise<string> {
+        const resp = await this.request<{ content: string }>('GET', `/api/hierarchy/${contextPath}/file?path=${encodeURIComponent(filePath)}`);
+        return resp.content;
+    }
+
     // --- Components ---
 
     async listComponents(sessionId?: string, componentType?: string): Promise<{ components: ComponentResponse[]; total: number }> {

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AuthManager } from './auth/authManager';
 import { ContextTreeProvider } from './hierarchy/contextTreeProvider';
+import { RemoteFileProvider, TACHIKOMA_SCHEME, buildFileUri } from './hierarchy/remoteFileProvider';
 import { CollaborationManager } from './collaborative/collaborationManager';
 import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
 import { log, getOutputChannel } from './log';
@@ -11,10 +12,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const authManager = new AuthManager();
     const contextTree = new ContextTreeProvider();
+    const remoteFileProvider = new RemoteFileProvider();
     const collabManager = new CollaborationManager();
     const collaboratorsProvider = new CollaboratorsProvider();
 
-    // Register tree views — use createTreeView for context tree to capture selection
+    // Register tachikoma:// URI scheme for remote file viewing
+    context.subscriptions.push(
+        vscode.workspace.registerTextDocumentContentProvider(TACHIKOMA_SCHEME, remoteFileProvider),
+    );
+
+    // Register tree views
     const contextTreeView = vscode.window.createTreeView('tachikomaContextTree', {
         treeDataProvider: contextTree,
     });
@@ -37,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext) {
     authManager.onDidConnect((client) => {
         log('Auth connected — initializing context tree and collaboration');
         contextTree.setClient(client);
+        remoteFileProvider.setClient(client);
         collaboratorsProvider.setClient(client);
         const userId = authManager.getUserId() ?? 'unknown';
         collabManager.connect(client, userId, userId);
@@ -46,6 +54,7 @@ export async function activate(context: vscode.ExtensionContext) {
     authManager.onDidDisconnect(() => {
         log('Auth disconnected — cleaning up');
         contextTree.setClient(null);
+        remoteFileProvider.setClient(null);
         collaboratorsProvider.setClient(null);
         collabManager.disconnect();
         collaboratorsProvider.unbind();
@@ -63,6 +72,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
         vscode.commands.registerCommand('tachikoma.showOutput', () => {
             getOutputChannel().show(true);
+        }),
+
+        vscode.commands.registerCommand('tachikoma.openRemoteFile', async (node: ContextNode) => {
+            if (!node.contextPath || !node.fsPath) return;
+            const uri = buildFileUri(node.contextPath, node.fsPath);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            await vscode.window.showTextDocument(doc, { preview: true });
         }),
 
         vscode.commands.registerCommand('tachikoma.startCollaborating', () => {
