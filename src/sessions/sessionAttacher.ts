@@ -36,7 +36,7 @@ export function attachTmux(opts: {
         iconPath: new vscode.ThemeIcon('terminal'),
     });
 
-    const cmd = `ssh -t ${sshTarget} 'tmux -S ${socket} attach-session -t ${opts.tmuxTarget}'`;
+    const cmd = `ssh -t ${sshTarget} 'bash -lc "tmux -S ${socket} attach-session -t ${opts.tmuxTarget}"'`;
     log(`Attaching: ${cmd}`);
     term.sendText(cmd);
     term.show();
@@ -59,7 +59,7 @@ export function attachZellijTerminal(opts: {
         iconPath: new vscode.ThemeIcon('terminal'),
     });
 
-    const cmd = `ssh -t ${sshTarget} 'zellij attach ${opts.sessionName}'`;
+    const cmd = `ssh -t ${sshTarget} 'bash -lc "zellij attach ${opts.sessionName}"'`;
     log(`Attaching zellij: ${cmd}`);
     term.sendText(cmd);
     term.show();
