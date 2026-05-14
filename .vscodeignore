@@ -6,3 +6,8 @@ out/
 *.ts
 tsconfig.json
 **/*.map
+.claude/
+.gitnexus/
+CLAUDE.md
+AGENTS.md
+package-lock.json
