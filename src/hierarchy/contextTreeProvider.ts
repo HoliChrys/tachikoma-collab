@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { TachikomaClient } from '../api/tachikomaClient';
 import type { ContextStore } from '../store/contextStore';
 import type { ContextNode, ContextStoreNode } from '../types';
-import { logError } from '../log';
+import { log, logError } from '../log';
 
 export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode> {
     private _onDidChangeTreeData = new vscode.EventEmitter<ContextNode | undefined>();
@@ -14,6 +14,10 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
     setStore(store: ContextStore): void {
         this.store = store;
         store.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+        store.onContextFilesChanged((ctxPath) => {
+            log(`Files changed in ${ctxPath} — refreshing tree`);
+            this._onDidChangeTreeData.fire(undefined);
+        });
     }
 
     setClient(client: TachikomaClient | null): void {

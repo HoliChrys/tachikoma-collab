@@ -30,6 +30,10 @@ export class ContextStore implements vscode.Disposable {
     private readonly _onSyncStateChanged = new vscode.EventEmitter<SyncState>();
     readonly onSyncStateChanged = this._onSyncStateChanged.event;
 
+    /** Fires with context path when files change inside a context. */
+    private readonly _onContextFilesChanged = new vscode.EventEmitter<string>();
+    readonly onContextFilesChanged = this._onContextFilesChanged.event;
+
     constructor(globalState: vscode.Memento) {
         this.cache = new PersistentCache(globalState);
     }
@@ -211,6 +215,9 @@ export class ContextStore implements vscode.Disposable {
                     'component.participant_joined', 'component.participant_left',
                     // ACL
                     'context.access.granted', 'context.access.revoked',
+                    // File changes
+                    'context.file_changed', 'file.created', 'file.deleted',
+                    'file.content.update', 'file.collab.activated',
                 ],
             },
             (connected) => {
@@ -333,6 +340,18 @@ export class ContextStore implements vscode.Disposable {
                     const node = this.nodes.get(ctxPath);
                     if (node) node.grantedUsers.delete(uid);
                     changed = true;
+                }
+                break;
+            }
+
+            case 'context.file_changed':
+            case 'file.created':
+            case 'file.deleted':
+            case 'file.content.update':
+            case 'file.collab.activated': {
+                const ctxPath = (event.context_path ?? '') as string;
+                if (ctxPath) {
+                    this._onContextFilesChanged.fire(ctxPath);
                 }
                 break;
             }
@@ -582,6 +601,7 @@ export class ContextStore implements vscode.Disposable {
         if (this.saveTimer) clearTimeout(this.saveTimer);
         this._onDidChange.dispose();
         this._onSyncStateChanged.dispose();
+        this._onContextFilesChanged.dispose();
     }
 }
 
