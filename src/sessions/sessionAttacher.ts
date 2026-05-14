@@ -71,7 +71,7 @@ export function attachTmux(opts: {
         hostUrl: opts.hostUrl,
         sshUser: opts.sshUser,
         token: opts.token,
-        remoteCommand: `bash -lc "stty rows 50 cols 200; tmux -S ${socket} attach-session -t ${opts.tmuxTarget}"`,
+        remoteCommand: `script -q /dev/null -c 'bash -lc "stty rows 50 cols 200 && tmux -S ${socket} attach-session -t ${opts.tmuxTarget}"'`,
     });
 }
 
@@ -86,6 +86,6 @@ export function attachZellijTerminal(opts: {
         hostUrl: opts.hostUrl,
         sshUser: opts.sshUser,
         token: opts.token,
-        remoteCommand: `bash -lc "stty rows 50 cols 200; zellij attach ${opts.sessionName}"`,
+        remoteCommand: `script -q /dev/null -c 'bash -lc "stty rows 50 cols 200 && zellij attach ${opts.sessionName}"'`,
     });
 }
