@@ -6,7 +6,7 @@ import { RemoteFileProvider, TACHIKOMA_SCHEME, buildFileUri } from './hierarchy/
 import { CollaborationManager } from './collaborative/collaborationManager';
 import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
 import { SessionsProvider, type SessionEntry, type ZellijEntry } from './sessions/sessionsProvider';
-import { attachTmux, attachZellijTerminal } from './sessions/sessionAttacher';
+import { attachSession, attachZellijSession, attachTmuxSession } from './sessions/sessionAttacher';
 import { log, getOutputChannel } from './log';
 import type { ContextNode } from './types';
 
@@ -133,21 +133,37 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage('Not connected — run "Tachikoma: Connect" first');
                 return;
             }
-            const sshUser = authManager.getUserId() ?? 'ubuntu';
 
-            if (node.kind === 'session' && node.sessionType === 'tmux' && node.tmuxTarget) {
-                attachTmux({ hostUrl, sshUser, token, ctxId: node.parentCtxId,
-                    tmuxTarget: node.tmuxTarget, tmuxSocket: node.tmuxSocket });
-            } else if (node.kind === 'zellij' || (node.kind === 'session' && node.sessionType === 'zellij')) {
-                const sessionName = node.kind === 'session' ? node.name : node.contextPath;
-                attachZellijTerminal({ hostUrl, sshUser, token, sessionName });
+            if (node.kind === 'session' && node.sessionType === 'tmux') {
+                attachTmuxSession({
+                    extensionUri: context.extensionUri,
+                    hostUrl, token,
+                    sessionId: node.sessionId,
+                    sessionName: node.name,
+                });
+            } else if (node.kind === 'session' && node.sessionType === 'zellij') {
+                attachZellijSession({
+                    extensionUri: context.extensionUri,
+                    hostUrl, token,
+                    sessionName: node.name,
+                    sessionId: node.sessionId,
+                });
+            } else if (node.kind === 'zellij') {
+                attachZellijSession({
+                    extensionUri: context.extensionUri,
+                    hostUrl, token,
+                    sessionName: node.contextPath || node.parentCtxId,
+                });
             }
         }),
         vscode.commands.registerCommand('tachikoma.openZellij', async (node: ZellijEntry) => {
             const hostUrl = authManager.getHostUrl() ?? config.get<string>('host') ?? '';
             const token = authManager.getClient()?.getToken() ?? '';
-            const sshUser = authManager.getUserId() ?? 'ubuntu';
-            attachZellijTerminal({ hostUrl, sshUser, token, sessionName: node.contextPath || node.parentCtxId });
+            attachZellijSession({
+                extensionUri: context.extensionUri,
+                hostUrl, token,
+                sessionName: node.contextPath || node.parentCtxId,
+            });
         }),
         vscode.commands.registerCommand('tachikoma.refreshSessions', () => {
             sessionsProvider.refresh();

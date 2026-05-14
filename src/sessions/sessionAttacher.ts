@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import { log } from '../log';
+import { openTerminalPanel } from '../terminal/terminalPanel';
 
 export function sshHostFromUrl(hostUrl: string): string {
     try {
@@ -12,80 +10,84 @@ export function sshHostFromUrl(hostUrl: string): string {
     }
 }
 
-/**
- * Create a temporary askpass script that echoes the ACL token.
- * SSH calls this script instead of prompting for a password.
- * The token is validated server-side by pam_script → /api/auth/me.
- */
-function createAskpass(token: string): string {
-    const dir = path.join(os.tmpdir(), 'tachikoma-vscode');
-    fs.mkdirSync(dir, { recursive: true });
-    const askpath = path.join(dir, `askpass-${process.pid}.sh`);
-    fs.writeFileSync(askpath, `#!/bin/sh\necho '${token.replace(/'/g, "'\\''")}'`, { mode: 0o700 });
-    return askpath;
+function wsBaseFromUrl(hostUrl: string): string {
+    try {
+        const u = new URL(hostUrl);
+        const proto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${proto}//${u.host}`;
+    } catch {
+        return hostUrl.replace(/^http/, 'ws');
+    }
 }
 
 /**
- * Create a VS Code terminal that SSHes to the tachikoma computer
- * using the ACL token for auth (via SSH_ASKPASS + PAM).
+ * Open a terminal WebView connected to the remote PTY proxy via WebSocket.
+ * The remote PTY stays at fixed size — no resize propagated to other clients.
  */
-function sshTerminal(opts: {
-    name: string;
+export function attachSession(opts: {
+    extensionUri: vscode.Uri;
     hostUrl: string;
-    sshUser: string;
     token: string;
-    remoteCommand: string;
-}): vscode.Terminal {
-    const host = sshHostFromUrl(opts.hostUrl);
-    const sshTarget = opts.sshUser ? `${opts.sshUser}@${host}` : host;
-    const askpass = createAskpass(opts.token);
+    sessionId: string;
+    title: string;
+}): vscode.WebviewPanel {
+    const wsBase = wsBaseFromUrl(opts.hostUrl);
+    const wsUrl = `${wsBase}/api/sessions/pty/${opts.sessionId}`;
 
-    const term = vscode.window.createTerminal({
-        name: opts.name,
-        iconPath: new vscode.ThemeIcon('terminal'),
-        env: {
-            SSH_ASKPASS: askpass,
-            SSH_ASKPASS_REQUIRE: 'force',
-            DISPLAY: ':0',
-        },
-    });
+    log(`Attach session: ${opts.title} → ${wsUrl}`);
 
-    const cmd = `ssh -t -o StrictHostKeyChecking=accept-new ${sshTarget} '${opts.remoteCommand}'`;
-    log(`SSH attach: ${cmd}`);
-    term.sendText(cmd);
-    term.show();
-    return term;
-}
-
-export function attachTmux(opts: {
-    hostUrl: string;
-    sshUser: string;
-    token: string;
-    ctxId: string;
-    tmuxTarget: string;
-    tmuxSocket?: string;
-}): vscode.Terminal {
-    const socket = opts.tmuxSocket || `/tmp/tmux-ctx/${opts.ctxId}/srv`;
-    return sshTerminal({
-        name: `tmux · ${opts.ctxId} · ${opts.tmuxTarget}`,
-        hostUrl: opts.hostUrl,
-        sshUser: opts.sshUser,
+    return openTerminalPanel({
+        extensionUri: opts.extensionUri,
+        title: opts.title,
+        wsUrl,
         token: opts.token,
-        remoteCommand: `script -q /dev/null -c 'bash -lc "stty rows 50 cols 200 && tmux -S ${socket} attach-session -t ${opts.tmuxTarget}"'`,
     });
 }
 
-export function attachZellijTerminal(opts: {
+/**
+ * Attach a zellij session by name.
+ * First resolves session_id from the sessions API, then connects via WebSocket PTY.
+ * Falls back to SSH if no PTY session ID is available.
+ */
+export function attachZellijSession(opts: {
+    extensionUri: vscode.Uri;
     hostUrl: string;
-    sshUser: string;
     token: string;
     sessionName: string;
-}): vscode.Terminal {
-    return sshTerminal({
-        name: `zellij · ${opts.sessionName}`,
+    sessionId?: string;
+}): vscode.WebviewPanel | vscode.Terminal {
+    if (opts.sessionId) {
+        return attachSession({
+            extensionUri: opts.extensionUri,
+            hostUrl: opts.hostUrl,
+            token: opts.token,
+            sessionId: opts.sessionId,
+            title: `zellij · ${opts.sessionName}`,
+        });
+    }
+
+    // Fallback: use the session name as ID (backend resolves it)
+    return attachSession({
+        extensionUri: opts.extensionUri,
         hostUrl: opts.hostUrl,
-        sshUser: opts.sshUser,
         token: opts.token,
-        remoteCommand: `script -q /dev/null -c 'bash -lc "stty rows 50 cols 200 && zellij attach ${opts.sessionName}"'`,
+        sessionId: opts.sessionName,
+        title: `zellij · ${opts.sessionName}`,
+    });
+}
+
+export function attachTmuxSession(opts: {
+    extensionUri: vscode.Uri;
+    hostUrl: string;
+    token: string;
+    sessionId: string;
+    sessionName: string;
+}): vscode.WebviewPanel {
+    return attachSession({
+        extensionUri: opts.extensionUri,
+        hostUrl: opts.hostUrl,
+        token: opts.token,
+        sessionId: opts.sessionId,
+        title: `tmux · ${opts.sessionName}`,
     });
 }

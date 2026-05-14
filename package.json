@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "1.9.1",
+  "version": "2.0.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -164,15 +164,17 @@
     "@types/node": "22.x",
     "@types/vscode": "^1.75.1",
     "@types/ws": "^8.18.1",
-    "typescript": "^5.9.2",
+    "@vscode/vsce": "^3.3.2",
     "esbuild": "^0.25.0",
-    "@vscode/vsce": "^3.3.2"
+    "typescript": "^5.9.2"
   },
   "dependencies": {
-    "yjs": "^13.6.27",
-    "y-protocols": "^1.0.6",
-    "ws": "^8.18.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "eventsource": "^3.0.7",
-    "lib0": "^0.2.103"
+    "lib0": "^0.2.103",
+    "ws": "^8.18.2",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.27"
   }
 }

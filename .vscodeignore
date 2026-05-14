@@ -1,7 +1,10 @@
 .git
 .gitignore
 src/
-node_modules/
+node_modules/**
+!node_modules/@xterm/xterm/css/xterm.css
+!node_modules/@xterm/xterm/lib/xterm.js
+!node_modules/@xterm/addon-fit/lib/addon-fit.js
 out/
 *.ts
 tsconfig.json
