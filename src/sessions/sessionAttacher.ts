@@ -49,7 +49,8 @@ export async function attachZellijSession(opts: {
     const webData = await opts.client.getSessionWeb(opts.sessionName);
     const ctxId = webData.ctx_id;
     const zwToken = webData.token;
-    const iframeUrl = `${opts.client.baseUrl}/zweb/${ctxId}/?auth_token=${encodeURIComponent(zwToken)}`;
+    // HTTPS subdomain served by Traefik — assets at /assets/* work natively
+    const iframeUrl = `https://session.zweb.${ctxId}.tachikoma.sh/?auth_token=${encodeURIComponent(zwToken)}`;
 
     const panel = vscode.window.createWebviewPanel(
         'tachikomaZellij',
@@ -62,7 +63,7 @@ export async function attachZellijSession(opts: {
 <html>
 <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${opts.client.baseUrl} http://* https://*; style-src 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src https://*.tachikoma.sh; style-src 'unsafe-inline';">
     <style>
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
         iframe { width: 100%; height: 100%; border: none; }
