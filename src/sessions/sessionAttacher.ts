@@ -53,14 +53,8 @@ export async function attachZellijSession(opts: {
 
     log(`Zellij open: ${opts.sessionName} → ${url}`);
 
-    // vscode.env.openExternal opens a fake WebView instead of the real browser.
-    // Use the system command directly.
-    const { exec } = await import('child_process');
-    const platform = process.platform;
-    const cmd = platform === 'darwin' ? `open "${url}"`
-        : platform === 'win32' ? `start "${url}"`
-        : `xdg-open "${url}"`;
-    exec(cmd);
+    // Use VS Code's built-in Simple Browser to display the page in a tab
+    await vscode.commands.executeCommand('simpleBrowser.show', vscode.Uri.parse(url));
 
     return undefined as unknown as vscode.WebviewPanel;
 }
