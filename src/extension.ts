@@ -179,7 +179,16 @@ export async function activate(context: vscode.ExtensionContext) {
                 const ctx = params.get('ctx') || uri.authority;
                 const fpath = uri.path.startsWith('/') ? uri.path.slice(1) : uri.path;
                 filePath = `${ctx}/${fpath}`;
-                vsCodeLink = uri.toString();
+                const linkParams = new URLSearchParams({
+                    ctx, path: fpath,
+                    line: String(sel.start.line + 1),
+                    col: String(sel.start.character + 1),
+                });
+                if (sel.start.line !== sel.end.line || sel.start.character !== sel.end.character) {
+                    linkParams.set('endLine', String(sel.end.line + 1));
+                    linkParams.set('endCol', String(sel.end.character + 1));
+                }
+                vsCodeLink = `vscode://Tachikoma.tachikoma-collab/open?${linkParams.toString()}`;
             } else {
                 filePath = vscode.workspace.asRelativePath(uri);
                 vsCodeLink = `vscode://file${uri.fsPath}:${sel.start.line + 1}:${sel.start.character + 1}`;
@@ -198,6 +207,33 @@ export async function activate(context: vscode.ExtensionContext) {
 
             await vscode.env.clipboard.writeText(ref);
             vscode.window.showInformationMessage(`Copied reference: ${filePath}:${lineRef}`);
+        }),
+    );
+
+    // URI handler: vscode://Tachikoma.tachikoma-collab/open?ctx=...&path=...&line=...&col=...
+    context.subscriptions.push(
+        vscode.window.registerUriHandler({
+            async handleUri(uri: vscode.Uri) {
+                if (uri.path !== '/open') return;
+                const params = new URLSearchParams(uri.query);
+                const ctx = params.get('ctx');
+                const fpath = params.get('path');
+                if (!ctx || !fpath) return;
+
+                log(`URI handler: open ${ctx}/${fpath}`);
+                const fileUri = buildFileUri(ctx, fpath);
+                const doc = await vscode.workspace.openTextDocument(fileUri);
+                const editor = await vscode.window.showTextDocument(doc);
+
+                const line = parseInt(params.get('line') ?? '1', 10) - 1;
+                const col = parseInt(params.get('col') ?? '1', 10) - 1;
+                const endLine = parseInt(params.get('endLine') ?? String(line + 1), 10) - 1;
+                const endCol = parseInt(params.get('endCol') ?? String(col + 1), 10) - 1;
+
+                const selection = new vscode.Selection(line, col, endLine, endCol);
+                editor.selection = selection;
+                editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
+            },
         }),
     );
 
