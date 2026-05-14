@@ -128,25 +128,26 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('tachikoma.attachSession', async (node: SessionEntry | ZellijEntry) => {
             const hostUrl = authManager.getHostUrl() ?? config.get<string>('host') ?? '';
-            if (!hostUrl) {
+            const token = authManager.getClient()?.getToken() ?? '';
+            if (!hostUrl || !token) {
                 vscode.window.showErrorMessage('Not connected — run "Tachikoma: Connect" first');
                 return;
             }
             const sshUser = authManager.getUserId() ?? 'ubuntu';
 
             if (node.kind === 'session' && node.sessionType === 'tmux' && node.tmuxTarget) {
-                attachTmux({ hostUrl, sshUser, ctxId: node.parentCtxId,
+                attachTmux({ hostUrl, sshUser, token, ctxId: node.parentCtxId,
                     tmuxTarget: node.tmuxTarget, tmuxSocket: node.tmuxSocket });
             } else if (node.kind === 'zellij' || (node.kind === 'session' && node.sessionType === 'zellij')) {
-                // Zellij session → attach via SSH terminal (like tmux)
                 const sessionName = node.kind === 'session' ? node.name : node.contextPath;
-                attachZellijTerminal({ hostUrl, sshUser, sessionName });
+                attachZellijTerminal({ hostUrl, sshUser, token, sessionName });
             }
         }),
         vscode.commands.registerCommand('tachikoma.openZellij', async (node: ZellijEntry) => {
             const hostUrl = authManager.getHostUrl() ?? config.get<string>('host') ?? '';
+            const token = authManager.getClient()?.getToken() ?? '';
             const sshUser = authManager.getUserId() ?? 'ubuntu';
-            attachZellijTerminal({ hostUrl, sshUser, sessionName: node.contextPath || node.parentCtxId });
+            attachZellijTerminal({ hostUrl, sshUser, token, sessionName: node.contextPath || node.parentCtxId });
         }),
         vscode.commands.registerCommand('tachikoma.refreshSessions', () => {
             sessionsProvider.refresh();

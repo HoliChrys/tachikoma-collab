@@ -1,80 +1,91 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { log } from '../log';
-import type { ZellijWebInfo } from './sessionTypes';
 
-/**
- * Extract SSH-able hostname from the tachikoma host URL.
- *   "http://dev-005:8000"  → "dev-005"
- *   "https://100.112.177.51:8000" → "100.112.177.51"
- */
 export function sshHostFromUrl(hostUrl: string): string {
     try {
-        const u = new URL(hostUrl);
-        return u.hostname;
+        return new URL(hostUrl).hostname;
     } catch {
         return hostUrl;
     }
 }
 
 /**
- * Open a VS Code terminal that SSHes into the tachikoma computer
- * and attaches to a tmux session bound to a context.
+ * Create a temporary askpass script that echoes the ACL token.
+ * SSH calls this script instead of prompting for a password.
+ * The token is validated server-side by pam_script → /api/auth/me.
  */
+function createAskpass(token: string): string {
+    const dir = path.join(os.tmpdir(), 'tachikoma-vscode');
+    fs.mkdirSync(dir, { recursive: true });
+    const askpath = path.join(dir, `askpass-${process.pid}.sh`);
+    fs.writeFileSync(askpath, `#!/bin/sh\necho '${token.replace(/'/g, "'\\''")}'`, { mode: 0o700 });
+    return askpath;
+}
+
+/**
+ * Create a VS Code terminal that SSHes to the tachikoma computer
+ * using the ACL token for auth (via SSH_ASKPASS + PAM).
+ */
+function sshTerminal(opts: {
+    name: string;
+    hostUrl: string;
+    sshUser: string;
+    token: string;
+    remoteCommand: string;
+}): vscode.Terminal {
+    const host = sshHostFromUrl(opts.hostUrl);
+    const sshTarget = opts.sshUser ? `${opts.sshUser}@${host}` : host;
+    const askpass = createAskpass(opts.token);
+
+    const term = vscode.window.createTerminal({
+        name: opts.name,
+        iconPath: new vscode.ThemeIcon('terminal'),
+        env: {
+            SSH_ASKPASS: askpass,
+            SSH_ASKPASS_REQUIRE: 'force',
+            DISPLAY: ':0',
+        },
+    });
+
+    const cmd = `ssh -t -o StrictHostKeyChecking=accept-new ${sshTarget} '${opts.remoteCommand}'`;
+    log(`SSH attach: ${cmd}`);
+    term.sendText(cmd);
+    term.show();
+    return term;
+}
+
 export function attachTmux(opts: {
     hostUrl: string;
     sshUser: string;
+    token: string;
     ctxId: string;
     tmuxTarget: string;
     tmuxSocket?: string;
 }): vscode.Terminal {
-    const host = sshHostFromUrl(opts.hostUrl);
     const socket = opts.tmuxSocket || `/tmp/tmux-ctx/${opts.ctxId}/srv`;
-    const sshTarget = opts.sshUser ? `${opts.sshUser}@${host}` : host;
-
-    const term = vscode.window.createTerminal({
+    return sshTerminal({
         name: `tmux · ${opts.ctxId} · ${opts.tmuxTarget}`,
-        iconPath: new vscode.ThemeIcon('terminal'),
+        hostUrl: opts.hostUrl,
+        sshUser: opts.sshUser,
+        token: opts.token,
+        remoteCommand: `bash -lc "tmux -S ${socket} attach-session -t ${opts.tmuxTarget}"`,
     });
-
-    const cmd = `ssh -t ${sshTarget} 'bash -lc "tmux -S ${socket} attach-session -t ${opts.tmuxTarget}"'`;
-    log(`Attaching: ${cmd}`);
-    term.sendText(cmd);
-    term.show();
-    return term;
 }
 
-/**
- * Open a VS Code terminal that SSHes and attaches to a zellij session.
- */
 export function attachZellijTerminal(opts: {
     hostUrl: string;
     sshUser: string;
+    token: string;
     sessionName: string;
 }): vscode.Terminal {
-    const host = sshHostFromUrl(opts.hostUrl);
-    const sshTarget = opts.sshUser ? `${opts.sshUser}@${host}` : host;
-
-    const term = vscode.window.createTerminal({
+    return sshTerminal({
         name: `zellij · ${opts.sessionName}`,
-        iconPath: new vscode.ThemeIcon('terminal'),
+        hostUrl: opts.hostUrl,
+        sshUser: opts.sshUser,
+        token: opts.token,
+        remoteCommand: `bash -lc "zellij attach ${opts.sessionName}"`,
     });
-
-    const cmd = `ssh -t ${sshTarget} 'bash -lc "zellij attach ${opts.sessionName}"'`;
-    log(`Attaching zellij: ${cmd}`);
-    term.sendText(cmd);
-    term.show();
-    return term;
-}
-
-/**
- * Open the Zellij web UI for a context in the external browser.
- */
-export async function openZellij(webInfo: ZellijWebInfo): Promise<void> {
-    if (!webInfo.available) {
-        vscode.window.showWarningMessage(`No Zellij server for ${webInfo.ctx_id}`);
-        return;
-    }
-    const url = webInfo.session_url || webInfo.url;
-    log(`Opening Zellij: ${url}`);
-    await vscode.env.openExternal(vscode.Uri.parse(url));
 }
