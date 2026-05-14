@@ -477,6 +477,48 @@ export class ContextStore implements vscode.Disposable {
         return this.nodes.get(path);
     }
 
+    getAllNodes(): ContextStoreNode[] {
+        return [...this.nodes.values()];
+    }
+
+    /**
+     * Find a context that best matches a session name.
+     * Strategies (in order):
+     *  1. Exact match against a context's last-segment name
+     *  2. Exact match against a context's full dotted path
+     *  3. Strip "remote-" prefix and match by name
+     *  4. Strip "k7f-", "m2x-", etc. agent prefixes and match
+     */
+    findContextByName(sessionName: string): ContextStoreNode | undefined {
+        if (!sessionName) return undefined;
+        const candidates = [
+            sessionName,
+            sessionName.replace(/^remote-/, ''),
+            sessionName.replace(/^k7f-/, ''),
+            sessionName.replace(/^m2x-/, ''),
+            sessionName.replace(/^k7f-remote-/, ''),
+            sessionName.replace(/^k7f-openclaw-/, ''),
+        ];
+
+        // First pass: exact dotted path match
+        for (const c of candidates) {
+            const direct = this.nodes.get(c);
+            if (direct) return direct;
+        }
+
+        // Second pass: match by last-segment name (deepest first → prefer space over galaxy)
+        const byDepth = [...this.nodes.values()].sort((a, b) => {
+            const da = a.path.split('.').length;
+            const db = b.path.split('.').length;
+            return db - da;
+        });
+        for (const c of candidates) {
+            const match = byDepth.find((n) => n.name === c);
+            if (match) return match;
+        }
+        return undefined;
+    }
+
     getSessions(): ContextSessionGroup[] {
         return this.sessions;
     }

@@ -144,32 +144,51 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
 
         const ctxMap = new Map<string, ContextNode>();
 
+        const ensureCtxNode = (ctxId: string, contextPath: string, opts?: { zwebAvailable?: boolean; zwebPort?: number }): ContextNode => {
+            let node = ctxMap.get(ctxId);
+            if (!node) {
+                node = {
+                    kind: 'context',
+                    ctxId,
+                    contextPath,
+                    isActive: activeCtxs.has(ctxId),
+                    zwebAvailable: opts?.zwebAvailable ?? false,
+                    zwebPort: opts?.zwebPort ?? 0,
+                    sessions: [],
+                };
+                ctxMap.set(ctxId, node);
+            } else if (opts?.zwebAvailable) {
+                node.zwebAvailable = true;
+                node.zwebPort = opts.zwebPort ?? node.zwebPort;
+            }
+            return node;
+        };
+
         for (const g of groups) {
-            const ctxId = g.ctx_id || g.context_path || 'global';
-            const node: ContextNode = {
-                kind: 'context',
-                ctxId,
-                contextPath: g.context_path,
-                isActive: activeCtxs.has(ctxId),
+            const groupCtxId = g.ctx_id || g.context_path || 'global';
+            const groupNode = ensureCtxNode(groupCtxId, g.context_path, {
                 zwebAvailable: g.zweb_available,
                 zwebPort: g.zweb_port,
-                sessions: [],
-            };
-            ctxMap.set(ctxId, node);
+            });
 
             if (g.zweb_available) {
-                node.sessions.push({
+                groupNode.sessions.push({
                     kind: 'zellij',
-                    parentCtxId: ctxId,
+                    parentCtxId: groupCtxId,
                     contextPath: g.context_path,
                     port: g.zweb_port,
                 } as unknown as SessionEntry);
             }
 
             for (const s of g.active_sessions ?? []) {
-                node.sessions.push({
+                // Heuristic: try to assign session to a more specific context based on its name
+                const inferred = this.store.findContextByName(s.name);
+                const targetCtxId = inferred ? inferred.path : groupCtxId;
+                const targetCtxPath = inferred ? inferred.path : g.context_path;
+                const targetNode = ensureCtxNode(targetCtxId, targetCtxPath);
+                targetNode.sessions.push({
                     kind: 'session',
-                    parentCtxId: ctxId,
+                    parentCtxId: targetCtxId,
                     sessionId: s.id,
                     name: s.name,
                     sessionType: (s.session_type as 'tmux' | 'zellij') || 'zellij',
@@ -178,23 +197,13 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
         }
 
         for (const [ctxId, tmuxList] of tmuxByCtx) {
-            let node = ctxMap.get(ctxId);
-            if (!node) {
-                node = {
-                    kind: 'context',
-                    ctxId,
-                    contextPath: ctxId,
-                    isActive: activeCtxs.has(ctxId),
-                    zwebAvailable: false,
-                    zwebPort: 0,
-                    sessions: [],
-                };
-                ctxMap.set(ctxId, node);
-            }
             for (const t of tmuxList) {
+                const inferred = this.store.findContextByName(t.name || t.tmux_target);
+                const targetCtxId = inferred ? inferred.path : ctxId;
+                const node = ensureCtxNode(targetCtxId, targetCtxId);
                 node.sessions.push({
                     kind: 'session',
-                    parentCtxId: ctxId,
+                    parentCtxId: targetCtxId,
                     sessionId: t.session_id,
                     name: t.name || t.tmux_target,
                     sessionType: 'tmux',
