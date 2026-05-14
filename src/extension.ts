@@ -146,14 +146,12 @@ export async function activate(context: vscode.ExtensionContext) {
                 await attachZellijSession({
                     client,
                     extensionUri: context.extensionUri,
-                    contextPath: node.parentCtxId,
                     sessionName: node.name,
                 });
             } else if (node.kind === 'zellij') {
                 await attachZellijSession({
                     client,
                     extensionUri: context.extensionUri,
-                    contextPath: node.contextPath || node.parentCtxId,
                     sessionName: node.contextPath || node.parentCtxId,
                 });
             }
@@ -164,7 +162,6 @@ export async function activate(context: vscode.ExtensionContext) {
             await attachZellijSession({
                 client,
                 extensionUri: context.extensionUri,
-                contextPath: node.contextPath || node.parentCtxId,
                 sessionName: node.contextPath || node.parentCtxId,
             });
         }),
