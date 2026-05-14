@@ -1,15 +1,27 @@
 import * as Y from 'yjs';
 import * as vscode from 'vscode';
 
+/**
+ * Bridges a VS Code TextDocument with the server's RealtimeInstance Y.Doc.
+ *
+ * Server schema (RealtimeInstance):
+ *   Y.Doc
+ *   ├── _data   (Y.Map)    ← field values; "content" key is a Y.Text
+ *   ├── _events (Y.Array)  ← event log
+ *   └── _meta   (Y.Map)    ← metadata (guid, entity_type, ...)
+ *
+ * We must mirror this structure exactly, otherwise the CRDT deltas
+ * coming from the server target shared types we don't have locally,
+ * and the Y.Text on our side never updates.
+ */
 export class YDocBridge implements vscode.Disposable {
     readonly doc: Y.Doc;
+    readonly dataMap: Y.Map<unknown>;
     readonly ytext: Y.Text;
 
     private isApplyingRemote = false;
-    private isApplyingLocal = false;
     private documentRef: vscode.TextDocument;
     private changeListener: vscode.Disposable;
-    private ydocObserver: () => void;
 
     private readonly _onLocalUpdate = new vscode.EventEmitter<Uint8Array>();
     readonly onLocalUpdate = this._onLocalUpdate.event;
@@ -17,39 +29,40 @@ export class YDocBridge implements vscode.Disposable {
     constructor(document: vscode.TextDocument) {
         this.documentRef = document;
         this.doc = new Y.Doc({ gc: true });
-        this.ytext = this.doc.getText('content');
 
-        // Seed Y.Text with the current document content
-        this.doc.transact(() => {
-            this.ytext.insert(0, document.getText());
-        });
+        // Mirror server schema: _data is the field map, content is a Y.Text inside it
+        this.dataMap = this.doc.getMap('_data');
 
-        // Listen for local VS Code edits → apply to Y.Text
+        let text = this.dataMap.get('content') as Y.Text | undefined;
+        if (!(text instanceof Y.Text)) {
+            text = new Y.Text();
+            this.dataMap.set('content', text);
+            this.doc.transact(() => {
+                text!.insert(0, document.getText());
+            });
+        }
+        this.ytext = text;
+
+        // Local edits in VS Code → apply to Y.Text
         this.changeListener = vscode.workspace.onDidChangeTextDocument((e) => {
             if (e.document !== this.documentRef) return;
             if (this.isApplyingRemote) return;
 
-            this.isApplyingLocal = true;
-            try {
-                this.doc.transact(() => {
-                    for (const change of e.contentChanges) {
-                        const offset = e.document.offsetAt(change.range.start);
-                        if (change.rangeLength > 0) {
-                            this.ytext.delete(offset, change.rangeLength);
-                        }
-                        if (change.text.length > 0) {
-                            this.ytext.insert(offset, change.text);
-                        }
+            this.doc.transact(() => {
+                for (const change of e.contentChanges) {
+                    const offset = e.document.offsetAt(change.range.start);
+                    if (change.rangeLength > 0) {
+                        this.ytext.delete(offset, change.rangeLength);
                     }
-                });
-            } finally {
-                this.isApplyingLocal = false;
-            }
+                    if (change.text.length > 0) {
+                        this.ytext.insert(offset, change.text);
+                    }
+                }
+            });
         });
 
-        // Listen for Y.Doc updates (from local edits) → emit for network send
-        this.ydocObserver = () => {};
-        this.doc.on('update', (update: Uint8Array, origin: unknown) => {
+        // Y.Doc update produced (local edits) → emit for network send
+        this.doc.on('update', (update: Uint8Array) => {
             if (this.isApplyingRemote) return;
             this._onLocalUpdate.fire(update);
         });
@@ -60,11 +73,13 @@ export class YDocBridge implements vscode.Disposable {
         try {
             const contentBefore = this.ytext.toString();
             Y.applyUpdate(this.doc, update);
-            const contentAfter = this.ytext.toString();
+
+            // Re-read the Y.Text reference in case the Map slot was replaced
+            const t = this.dataMap.get('content');
+            const contentAfter = (t instanceof Y.Text) ? t.toString() : String(t ?? '');
 
             if (contentBefore === contentAfter) return;
 
-            // Find the editor for this document and apply the diff
             const editor = vscode.window.visibleTextEditors.find(
                 (e) => e.document === this.documentRef
             );
