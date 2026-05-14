@@ -58,41 +58,26 @@ export async function attachZellijSession(opts: {
         { enableScripts: true, retainContextWhenHidden: true },
     );
 
+    // Submit a hidden form POST to /command/login INSIDE the iframe.
+    // This sets the cookie in the iframe's browsing context (not the WebView's).
+    // The server responds with a redirect to / where is_authenticated=true.
     panel.webview.html = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src https://*.tachikoma.sh; connect-src https://*.tachikoma.sh; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src https://*.tachikoma.sh http://*; form-action https://*.tachikoma.sh http://*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
     <style>
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
-        iframe { width: 100%; height: 100%; border: none; display: none; }
-        #status { color: #888; font: 13px monospace; padding: 20px; }
+        iframe { width: 100%; height: 100%; border: none; }
     </style>
 </head>
 <body>
-    <div id="status">Connecting to ${opts.sessionName}...</div>
-    <iframe id="zframe" allow="clipboard-read; clipboard-write"></iframe>
-    <script>
-        (async () => {
-            const status = document.getElementById('status');
-            const iframe = document.getElementById('zframe');
-            try {
-                status.textContent = 'Authenticating...';
-                await fetch(${JSON.stringify(baseUrl + '/command/login')}, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ auth_token: ${JSON.stringify(zwToken)}, remember_me: true }),
-                    credentials: 'include',
-                });
-                status.textContent = 'Loading terminal...';
-            } catch (e) {
-                status.textContent = 'Auth error: ' + e.message + ' — loading anyway...';
-            }
-            iframe.src = ${JSON.stringify(baseUrl + '/')};
-            iframe.style.display = 'block';
-            iframe.onload = () => { status.style.display = 'none'; };
-        })();
-    </script>
+    <iframe id="zframe" name="zframe" allow="clipboard-read; clipboard-write"></iframe>
+    <form id="loginForm" method="POST" action="${baseUrl}/command/login" target="zframe" style="display:none">
+        <input type="hidden" name="auth_token" value="${zwToken}">
+        <input type="hidden" name="remember_me" value="true">
+    </form>
+    <script>document.getElementById('loginForm').submit();</script>
 </body>
 </html>`;
 
