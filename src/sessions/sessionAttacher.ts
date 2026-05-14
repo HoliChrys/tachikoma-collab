@@ -52,6 +52,15 @@ export async function attachZellijSession(opts: {
     const url = `https://session.zweb.${ctxId}.tachikoma.sh/?auth_token=${encodeURIComponent(zwToken)}`;
 
     log(`Zellij open: ${opts.sessionName} → ${url}`);
-    await vscode.env.openExternal(vscode.Uri.parse(url));
+
+    // vscode.env.openExternal opens a fake WebView instead of the real browser.
+    // Use the system command directly.
+    const { exec } = await import('child_process');
+    const platform = process.platform;
+    const cmd = platform === 'darwin' ? `open "${url}"`
+        : platform === 'win32' ? `start "${url}"`
+        : `xdg-open "${url}"`;
+    exec(cmd);
+
     return undefined as unknown as vscode.WebviewPanel;
 }
