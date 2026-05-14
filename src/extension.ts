@@ -6,7 +6,7 @@ import { RemoteFileProvider, TACHIKOMA_SCHEME, buildFileUri } from './hierarchy/
 import { CollaborationManager } from './collaborative/collaborationManager';
 import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
 import { SessionsProvider, type SessionEntry, type ZellijEntry } from './sessions/sessionsProvider';
-import { attachTmux, openZellij } from './sessions/sessionAttacher';
+import { attachTmux, attachZellijTerminal } from './sessions/sessionAttacher';
 import { log, getOutputChannel } from './log';
 import type { ContextNode } from './types';
 
@@ -126,50 +126,26 @@ export async function activate(context: vscode.ExtensionContext) {
             return collabManager.stopCollaborating(editor.document);
         }),
         vscode.commands.registerCommand('tachikoma.attachSession', async (node: SessionEntry | ZellijEntry) => {
-            const hostUrl = config.get<string>('host') ?? '';
+            const hostUrl = authManager.getHostUrl() ?? config.get<string>('host') ?? '';
             if (!hostUrl) {
-                vscode.window.showErrorMessage('tachikoma.host setting not configured');
+                vscode.window.showErrorMessage('Not connected — run "Tachikoma: Connect" first');
                 return;
             }
             const sshUser = authManager.getUserId() ?? 'ubuntu';
 
             if (node.kind === 'session' && node.sessionType === 'tmux' && node.tmuxTarget) {
-                attachTmux({
-                    hostUrl,
-                    sshUser,
-                    ctxId: node.parentCtxId,
-                    tmuxTarget: node.tmuxTarget,
-                    tmuxSocket: node.tmuxSocket,
-                });
-            } else if (node.kind === 'zellij') {
-                const client = authManager.getClient();
-                if (!client) return;
-                try {
-                    const info = await client.getSessionWebInfo(node.contextPath || node.parentCtxId);
-                    await openZellij(info);
-                } catch (err) {
-                    vscode.window.showErrorMessage(`Failed to open Zellij: ${err}`);
-                }
-            } else if (node.kind === 'session' && node.sessionType === 'zellij') {
-                const client = authManager.getClient();
-                if (!client) return;
-                try {
-                    const info = await client.getSessionWebInfo(node.parentCtxId);
-                    await openZellij(info);
-                } catch (err) {
-                    vscode.window.showErrorMessage(`Failed to open Zellij: ${err}`);
-                }
+                attachTmux({ hostUrl, sshUser, ctxId: node.parentCtxId,
+                    tmuxTarget: node.tmuxTarget, tmuxSocket: node.tmuxSocket });
+            } else if (node.kind === 'zellij' || (node.kind === 'session' && node.sessionType === 'zellij')) {
+                // Zellij session → attach via SSH terminal (like tmux)
+                const sessionName = node.kind === 'session' ? node.name : node.contextPath;
+                attachZellijTerminal({ hostUrl, sshUser, sessionName });
             }
         }),
         vscode.commands.registerCommand('tachikoma.openZellij', async (node: ZellijEntry) => {
-            const client = authManager.getClient();
-            if (!client) return;
-            try {
-                const info = await client.getSessionWebInfo(node.contextPath || node.parentCtxId);
-                await openZellij(info);
-            } catch (err) {
-                vscode.window.showErrorMessage(`Failed to open Zellij: ${err}`);
-            }
+            const hostUrl = authManager.getHostUrl() ?? config.get<string>('host') ?? '';
+            const sshUser = authManager.getUserId() ?? 'ubuntu';
+            attachZellijTerminal({ hostUrl, sshUser, sessionName: node.contextPath || node.parentCtxId });
         }),
         vscode.commands.registerCommand('tachikoma.refreshSessions', () => {
             sessionsProvider.refresh();

@@ -34,6 +34,10 @@ export class AuthManager implements vscode.Disposable {
         return this.userId;
     }
 
+    getHostUrl(): string | null {
+        return this.hostUrl;
+    }
+
     async connect(context: vscode.ExtensionContext): Promise<TachikomaClient | null> {
         const channel = getOutputChannel();
         channel.show(true);

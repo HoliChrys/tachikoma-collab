@@ -44,6 +44,29 @@ export function attachTmux(opts: {
 }
 
 /**
+ * Open a VS Code terminal that SSHes and attaches to a zellij session.
+ */
+export function attachZellijTerminal(opts: {
+    hostUrl: string;
+    sshUser: string;
+    sessionName: string;
+}): vscode.Terminal {
+    const host = sshHostFromUrl(opts.hostUrl);
+    const sshTarget = opts.sshUser ? `${opts.sshUser}@${host}` : host;
+
+    const term = vscode.window.createTerminal({
+        name: `zellij · ${opts.sessionName}`,
+        iconPath: new vscode.ThemeIcon('terminal'),
+    });
+
+    const cmd = `ssh -t ${sshTarget} 'zellij attach ${opts.sessionName}'`;
+    log(`Attaching zellij: ${cmd}`);
+    term.sendText(cmd);
+    term.show();
+    return term;
+}
+
+/**
  * Open the Zellij web UI for a context in the external browser.
  */
 export async function openZellij(webInfo: ZellijWebInfo): Promise<void> {
