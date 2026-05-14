@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -69,6 +69,18 @@
       {
         "command": "tachikoma.invalidateCache",
         "title": "Tachikoma: Invalidate Cache and Resync"
+      },
+      {
+        "command": "tachikoma.copyWithReference",
+        "title": "Tachikoma: Copy Selection with File Reference"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "tachikoma.copyWithReference",
+        "key": "ctrl+shift+alt+c",
+        "mac": "cmd+shift+alt+c",
+        "when": "editorHasSelection"
       }
     ],
     "menus": {

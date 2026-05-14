@@ -156,6 +156,49 @@ export async function activate(context: vscode.ExtensionContext) {
             await store.invalidateCache();
             vscode.window.showInformationMessage('Tachikoma cache invalidated and resynced');
         }),
+
+        vscode.commands.registerCommand('tachikoma.copyWithReference', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) return;
+
+            const doc = editor.document;
+            const sel = editor.selection;
+            const selectedText = doc.getText(sel);
+            if (!selectedText) {
+                vscode.window.showWarningMessage('No text selected');
+                return;
+            }
+
+            // Build file reference
+            const uri = doc.uri;
+            let filePath: string;
+            let vsCodeLink: string;
+
+            if (uri.scheme === TACHIKOMA_SCHEME) {
+                const params = new URLSearchParams(uri.query);
+                const ctx = params.get('ctx') || uri.authority;
+                const fpath = uri.path.startsWith('/') ? uri.path.slice(1) : uri.path;
+                filePath = `${ctx}/${fpath}`;
+                vsCodeLink = uri.toString();
+            } else {
+                filePath = vscode.workspace.asRelativePath(uri);
+                vsCodeLink = `vscode://file${uri.fsPath}:${sel.start.line + 1}:${sel.start.character + 1}`;
+            }
+
+            const startLine = sel.start.line + 1;
+            const endLine = sel.end.line + 1;
+            const lineRef = startLine === endLine
+                ? `L${startLine}:${sel.start.character + 1}-${sel.end.character + 1}`
+                : `L${startLine}-${endLine}`;
+
+            // Indent selected text with >
+            const quoted = selectedText.split('\n').map((l) => `> ${l}`).join('\n');
+
+            const ref = `${filePath}:${lineRef}\n${quoted}\n${vsCodeLink}`;
+
+            await vscode.env.clipboard.writeText(ref);
+            vscode.window.showInformationMessage(`Copied reference: ${filePath}:${lineRef}`);
+        }),
     );
 
     if (config.get<boolean>('autoConnect')) {
