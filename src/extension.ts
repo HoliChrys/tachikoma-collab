@@ -152,7 +152,8 @@ export async function activate(context: vscode.ExtensionContext) {
                 await attachZellijSession({
                     client,
                     extensionUri: context.extensionUri,
-                    sessionName: node.contextPath || node.parentCtxId,
+                    sessionName: node.parentCtxId,
+                    ctxId: node.parentCtxId,
                 });
             }
         }),
@@ -162,7 +163,8 @@ export async function activate(context: vscode.ExtensionContext) {
             await attachZellijSession({
                 client,
                 extensionUri: context.extensionUri,
-                sessionName: node.contextPath || node.parentCtxId,
+                sessionName: node.parentCtxId,
+                ctxId: node.parentCtxId,
             });
         }),
         vscode.commands.registerCommand('tachikoma.refreshSessions', () => {

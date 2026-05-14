@@ -43,18 +43,26 @@ export async function attachZellijSession(opts: {
     client: TachikomaClient;
     extensionUri: vscode.Uri;
     sessionName: string;
-}): Promise<vscode.WebviewPanel> {
+    ctxId?: string;
+}): Promise<void> {
     log(`Attach zellij: ${opts.sessionName}`);
 
-    const webData = await opts.client.getSessionWeb(opts.sessionName);
-    const ctxId = webData.ctx_id;
-    const zwToken = webData.token;
-    const url = `https://session.zweb.${ctxId}.tachikoma.sh/?auth_token=${encodeURIComponent(zwToken)}`;
+    let ctxId = opts.ctxId;
+    let zwToken: string;
+
+    if (!ctxId) {
+        // Session name given (e.g. "remote-sdk") → resolve ctx + token
+        const webData = await opts.client.getSessionWeb(opts.sessionName);
+        ctxId = webData.ctx_id;
+        zwToken = webData.token;
+    } else {
+        // ctx_id given directly (e.g. from "Zellij Web" entry) → resolve via web-info
+        const webInfo = await opts.client.getSessionWebInfo(ctxId);
+        zwToken = webInfo.token;
+    }
+
+    const url = `https://session.zweb.${ctxId}.tachikoma.sh/${opts.sessionName}?auth_token=${encodeURIComponent(zwToken)}`;
 
     log(`Zellij open: ${opts.sessionName} → ${url}`);
-
-    // Use VS Code's built-in Simple Browser to display the page in a tab
     await vscode.commands.executeCommand('simpleBrowser.show', vscode.Uri.parse(url));
-
-    return undefined as unknown as vscode.WebviewPanel;
 }
