@@ -47,9 +47,9 @@ export async function attachZellijSession(opts: {
     log(`Attach zellij: ${opts.sessionName}`);
 
     const webData = await opts.client.getSessionWeb(opts.sessionName);
-    const sessionUrl = webData.session_url ?? webData.iframe_url;
+    const ctxId = webData.ctx_id;
     const zwToken = webData.token;
-    const baseUrl = sessionUrl.split('?')[0];
+    const iframeUrl = `${opts.client.baseUrl}/zweb/${ctxId}/?auth_token=${encodeURIComponent(zwToken)}`;
 
     const panel = vscode.window.createWebviewPanel(
         'tachikomaZellij',
@@ -58,30 +58,22 @@ export async function attachZellijSession(opts: {
         { enableScripts: true, retainContextWhenHidden: true },
     );
 
-    // Submit a hidden form POST to /command/login INSIDE the iframe.
-    // This sets the cookie in the iframe's browsing context (not the WebView's).
-    // The server responds with a redirect to / where is_authenticated=true.
     panel.webview.html = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src https://*.tachikoma.sh http://*; form-action https://*.tachikoma.sh http://*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${opts.client.baseUrl} http://* https://*; style-src 'unsafe-inline';">
     <style>
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
         iframe { width: 100%; height: 100%; border: none; }
     </style>
 </head>
 <body>
-    <iframe id="zframe" name="zframe" allow="clipboard-read; clipboard-write"></iframe>
-    <form id="loginForm" method="POST" action="${baseUrl}/command/login" target="zframe" style="display:none">
-        <input type="hidden" name="auth_token" value="${zwToken}">
-        <input type="hidden" name="remember_me" value="true">
-    </form>
-    <script>document.getElementById('loginForm').submit();</script>
+    <iframe src="${iframeUrl}" allow="clipboard-read; clipboard-write"></iframe>
 </body>
 </html>`;
 
-    log(`Zellij panel: ${opts.sessionName} → ${baseUrl}`);
+    log(`Zellij panel: ${opts.sessionName} → ${iframeUrl}`);
     panel.onDidDispose(() => log(`Zellij panel closed: ${opts.sessionName}`));
     return panel;
 }
