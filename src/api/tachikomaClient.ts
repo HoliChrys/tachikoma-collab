@@ -162,7 +162,7 @@ export class TachikomaClient {
         return this.request('GET', `/api/sessions/web-info${qs}`);
     }
 
-    async getSessionWeb(sessionName: string): Promise<{ ctx_id: string; iframe_url: string; port: number; token: string }> {
+    async getSessionWeb(sessionName: string): Promise<{ ctx_id: string; iframe_url: string; session_url?: string; port: number; token: string }> {
         return this.request('GET', `/api/sessions/${encodeURIComponent(sessionName)}/web`);
     }
 

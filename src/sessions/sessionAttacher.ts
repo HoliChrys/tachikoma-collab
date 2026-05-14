@@ -47,10 +47,9 @@ export async function attachZellijSession(opts: {
 
     const webData = await opts.client.getSessionWeb(opts.sessionName);
 
-    // The iframe_url uses 127.0.x.x (local to server).
-    // Replace with the Tailscale-accessible API host.
-    const apiHost = new URL(opts.client.baseUrl).hostname;
-    const iframeUrl = webData.iframe_url.replace(/127\.0\.\d+\.\d+/, apiHost);
+    // Use session_url — routed via Tailscale DNS + Traefik HTTPS proxy
+    // e.g. https://session.tachikoma.paralelle.sdk.tachikoma.sh?token=...
+    const iframeUrl = webData.session_url ?? webData.iframe_url;
 
     const panel = vscode.window.createWebviewPanel(
         'tachikomaZellij',
