@@ -62,13 +62,17 @@ export async function attachZellijSession(opts: {
 <html>
 <head>
     <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src https://*.tachikoma.sh https://* http://*; style-src 'unsafe-inline';">
     <style>
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
         iframe { width: 100%; height: 100%; border: none; }
+        #loading { color: #888; font: 13px monospace; padding: 20px; }
     </style>
 </head>
 <body>
-    <iframe src="${iframeUrl}" allow="clipboard-read; clipboard-write"></iframe>
+    <div id="loading">Loading ${opts.sessionName}...</div>
+    <iframe id="zframe" src="${iframeUrl}" allow="clipboard-read; clipboard-write"
+        onload="document.getElementById('loading').style.display='none'"></iframe>
 </body>
 </html>`;
 
