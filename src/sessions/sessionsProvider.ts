@@ -42,6 +42,7 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
 
     private client: TachikomaClient | null = null;
     private store: ContextStore | null = null;
+    private storeListener: vscode.Disposable | null = null;
     private connected = false;
 
     setClient(client: TachikomaClient | null): void {
@@ -51,8 +52,9 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
     }
 
     setStore(store: ContextStore): void {
+        this.storeListener?.dispose();
         this.store = store;
-        store.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+        this.storeListener = store.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
     }
 
     /** No-op now: refresh is driven by SSE events on the ContextStore. */

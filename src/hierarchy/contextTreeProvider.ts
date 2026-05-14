@@ -10,14 +10,18 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
 
     private store: ContextStore | null = null;
     private client: TachikomaClient | null = null;
+    private storeDisposables: vscode.Disposable[] = [];
 
     setStore(store: ContextStore): void {
+        this.storeDisposables.forEach((d) => d.dispose());
         this.store = store;
-        store.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
-        store.onContextFilesChanged((ctxPath) => {
-            log(`Files changed in ${ctxPath} — refreshing tree`);
-            this._onDidChangeTreeData.fire(undefined);
-        });
+        this.storeDisposables = [
+            store.onDidChange(() => this._onDidChangeTreeData.fire(undefined)),
+            store.onContextFilesChanged((ctxPath) => {
+                log(`Files changed in ${ctxPath} — refreshing tree`);
+                this._onDidChangeTreeData.fire(undefined);
+            }),
+        ];
     }
 
     setClient(client: TachikomaClient | null): void {

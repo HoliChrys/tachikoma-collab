@@ -12,10 +12,12 @@ export class CollaboratorsProvider implements vscode.TreeDataProvider<CollabNode
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private store: ContextStore | null = null;
+    private storeListener: vscode.Disposable | null = null;
 
     setStore(store: ContextStore): void {
+        this.storeListener?.dispose();
         this.store = store;
-        store.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+        this.storeListener = store.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
     }
 
     getTreeItem(element: CollabNode): vscode.TreeItem {
