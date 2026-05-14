@@ -101,11 +101,17 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
 }
 
 function parseUri(uri: vscode.Uri): { contextPath: string; filePath: string } {
-    const contextPath = uri.authority;
+    // VS Code lowercases the URI authority (per RFC 3986). To preserve the
+    // original case-sensitive context path (e.g. "tachikoma.paralelle.GenAI"),
+    // we store it in the query param "ctx" and use "tachikoma" as a dummy authority.
+    const params = new URLSearchParams(uri.query);
+    const contextPath = params.get('ctx') || uri.authority;
     const filePath = uri.path.startsWith('/') ? uri.path.slice(1) : uri.path;
     return { contextPath, filePath };
 }
 
 export function buildFileUri(contextPath: string, filePath: string): vscode.Uri {
-    return vscode.Uri.parse(`${TACHIKOMA_SCHEME}://${contextPath}/${filePath}`);
+    return vscode.Uri.parse(
+        `${TACHIKOMA_SCHEME}://tachikoma/${filePath}?ctx=${encodeURIComponent(contextPath)}`
+    );
 }

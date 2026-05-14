@@ -45,7 +45,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
     function contextFromUri(uri: vscode.Uri): string | undefined {
         if (uri.scheme !== TACHIKOMA_SCHEME) return undefined;
-        return uri.authority;
+        const params = new URLSearchParams(uri.query);
+        return params.get('ctx') || uri.authority;
     }
 
     const config = vscode.workspace.getConfiguration('tachikoma');
