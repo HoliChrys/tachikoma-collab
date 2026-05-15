@@ -4,6 +4,7 @@ import { AuthManager } from './auth/authManager';
 import { ContextStore } from './store/contextStore';
 import { ContextTreeProvider } from './hierarchy/contextTreeProvider';
 import { RemoteFileProvider, TACHIKOMA_SCHEME, buildFileUri } from './hierarchy/remoteFileProvider';
+import { EventBus } from './collaborative/sseClient';
 import { CollaborationManager } from './collaborative/collaborationManager';
 import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
 import { SessionsProvider, type SessionEntry, type ZellijEntry } from './sessions/sessionsProvider';
@@ -90,6 +91,11 @@ export async function activate(context: vscode.ExtensionContext) {
         sessionsProvider.setClient(client);
         collabManager.connect(client, userId, userId);
 
+        // Wire file watching SSE for bidirectional sync
+        const fileEventBus = new EventBus({ token: client.getToken() ?? '', baseUrl: client.baseUrl });
+        remoteFileProvider.setEventBus(fileEventBus);
+        remoteFileProvider.watch();
+
         // Register this VS Code instance as a local computer
         try {
             await client.registerComputer({
@@ -117,6 +123,7 @@ export async function activate(context: vscode.ExtensionContext) {
     authManager.onDidDisconnect(() => {
         log('Auth disconnected — cleaning up');
         if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+        remoteFileProvider.setEventBus(null);
         contextTree.setClient(null);
         remoteFileProvider.setClient(null);
         sessionsProvider.setClient(null);
