@@ -483,6 +483,60 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
     );
 
+    // Terminal profile: when VS Code opens a terminal for a tachikoma:// workspace,
+    // provide an SSH terminal to the server instead of failing on missing local CWD.
+    context.subscriptions.push(
+        vscode.window.registerTerminalProfileProvider('tachikoma.remoteShell', {
+            provideTerminalProfile(): vscode.ProviderResult<vscode.TerminalProfile> {
+                const hostUrl = authManager.getHostUrl() ?? '';
+                const userId = authManager.getUserId() ?? 'ubuntu';
+                const host = hostUrl ? new URL(hostUrl).hostname : 'localhost';
+                const folder = (vscode.workspace.workspaceFolders ?? []).find(
+                    (f) => f.uri.scheme === TACHIKOMA_SCHEME,
+                );
+                let cwd = `/home/${userId}/tachikoma_monorepo`;
+                if (folder) {
+                    const params = new URLSearchParams(folder.uri.query);
+                    const ctx = params.get('ctx') || folder.uri.authority;
+                    if (ctx) cwd = `/home/${userId}/tachikoma_monorepo/${ctx.replace(/\./g, '/')}`;
+                }
+                return new vscode.TerminalProfile({
+                    name: 'Tachikoma Remote',
+                    shellPath: 'ssh',
+                    shellArgs: ['-t', `${userId}@${host}`, `cd ${cwd} && exec $SHELL -l`],
+                    iconPath: new vscode.ThemeIcon('remote'),
+                });
+            },
+        }),
+    );
+
+    // Intercept new terminals: if the active workspace folder is tachikoma://,
+    // kill the broken terminal and open an SSH one instead.
+    context.subscriptions.push(
+        vscode.window.onDidOpenTerminal((term) => {
+            const opts = (term.creationOptions as vscode.TerminalOptions);
+            const cwdUri = opts.cwd;
+            if (cwdUri && typeof cwdUri !== 'string' && (cwdUri as vscode.Uri).scheme === TACHIKOMA_SCHEME) {
+                const hostUrl = authManager.getHostUrl() ?? '';
+                const userId = authManager.getUserId() ?? 'ubuntu';
+                const host = hostUrl ? new URL(hostUrl).hostname : 'localhost';
+                const params = new URLSearchParams((cwdUri as vscode.Uri).query);
+                const ctx = params.get('ctx') || (cwdUri as vscode.Uri).authority;
+                const cwd = ctx
+                    ? `/home/${userId}/tachikoma_monorepo/${ctx.replace(/\./g, '/')}`
+                    : `/home/${userId}/tachikoma_monorepo`;
+                term.dispose();
+                const sshTerm = vscode.window.createTerminal({
+                    name: `ssh · ${ctx || 'tachikoma'}`,
+                    shellPath: 'ssh',
+                    shellArgs: ['-t', `${userId}@${host}`, `cd ${cwd} && exec $SHELL -l`],
+                    iconPath: new vscode.ThemeIcon('remote'),
+                });
+                sshTerm.show();
+            }
+        }),
+    );
+
     if (config.get<boolean>('autoConnect')) {
         log('Auto-connect enabled, attempting reconnect...');
         void authManager.tryReconnect(context);
