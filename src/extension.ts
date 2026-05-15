@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as os from 'os';
 import { AuthManager } from './auth/authManager';
 import { ContextStore } from './store/contextStore';
 import { ContextTreeProvider } from './hierarchy/contextTreeProvider';
@@ -77,6 +78,9 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
     );
 
+    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    const machineId = `vscode-${os.hostname()}-${os.userInfo().username}`;
+
     authManager.onDidConnect(async (client) => {
         log('Auth connected — initializing store');
         const userId = authManager.getUserId() ?? 'unknown';
@@ -86,11 +90,33 @@ export async function activate(context: vscode.ExtensionContext) {
         sessionsProvider.setClient(client);
         collabManager.connect(client, userId, userId);
 
+        // Register this VS Code instance as a local computer
+        try {
+            await client.registerComputer({
+                machine_id: machineId,
+                hostname: os.hostname(),
+                name: `${os.hostname()} (VS Code)`,
+                node_type: 'local',
+                os_type: os.platform(),
+                os_version: os.release(),
+            });
+            log(`Computer registered: ${machineId}`);
+
+            // Heartbeat every 2 minutes
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(() => {
+                client.computerHeartbeat(machineId).catch(() => {});
+            }, 120_000);
+        } catch (err) {
+            log(`Computer register failed (non-blocking): ${err}`);
+        }
+
         await store.init(client, userId);
     });
 
     authManager.onDidDisconnect(() => {
         log('Auth disconnected — cleaning up');
+        if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
         contextTree.setClient(null);
         remoteFileProvider.setClient(null);
         sessionsProvider.setClient(null);
@@ -155,6 +181,56 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('tachikoma.refreshSessions', () => {
             sessionsProvider.refresh();
+        }),
+        vscode.commands.registerCommand('tachikoma.newFile', async (node?: ContextNode) => {
+            const client = authManager.getClient();
+            if (!client) { vscode.window.showErrorMessage('Not connected'); return; }
+            const ctxPath = node?.contextPath ?? node?.path;
+            if (!ctxPath) { vscode.window.showWarningMessage('Select a context or folder first'); return; }
+            const name = await vscode.window.showInputBox({ prompt: 'File name', placeHolder: 'example.ts' });
+            if (!name) return;
+            const parent = node?.type === 'folder' ? (node.subpath ?? '') : '';
+            const fullPath = parent ? `${parent}/${name}` : name;
+            try {
+                await client.createFile(ctxPath, fullPath);
+                contextTree.refresh();
+                const uri = buildFileUri(ctxPath, fullPath);
+                const doc = await vscode.workspace.openTextDocument(uri);
+                await vscode.window.showTextDocument(doc);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to create file: ${err}`);
+            }
+        }),
+        vscode.commands.registerCommand('tachikoma.newFolder', async (node?: ContextNode) => {
+            const client = authManager.getClient();
+            if (!client) { vscode.window.showErrorMessage('Not connected'); return; }
+            const ctxPath = node?.contextPath ?? node?.path;
+            if (!ctxPath) { vscode.window.showWarningMessage('Select a context or folder first'); return; }
+            const name = await vscode.window.showInputBox({ prompt: 'Folder name', placeHolder: 'src' });
+            if (!name) return;
+            const parent = node?.type === 'folder' ? (node.subpath ?? '') : '';
+            const fullPath = parent ? `${parent}/${name}` : name;
+            try {
+                await client.createDir(ctxPath, fullPath);
+                contextTree.refresh();
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to create folder: ${err}`);
+            }
+        }),
+        vscode.commands.registerCommand('tachikoma.deleteEntry', async (node?: ContextNode) => {
+            const client = authManager.getClient();
+            if (!client) { vscode.window.showErrorMessage('Not connected'); return; }
+            if (!node?.contextPath || !node.fsPath) return;
+            const confirm = await vscode.window.showWarningMessage(
+                `Delete "${node.name}"?`, { modal: true }, 'Delete',
+            );
+            if (confirm !== 'Delete') return;
+            try {
+                await client.deleteEntry(node.contextPath, node.fsPath);
+                contextTree.refresh();
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to delete: ${err}`);
+            }
         }),
         vscode.commands.registerCommand('tachikoma.invalidateCache', async () => {
             await store.invalidateCache();

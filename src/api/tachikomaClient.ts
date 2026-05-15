@@ -146,6 +146,18 @@ export class TachikomaClient {
         await this.request('PUT', `/api/hierarchy/${contextPath}/file?path=${encodeURIComponent(filePath)}`, { content });
     }
 
+    async createFile(contextPath: string, filePath: string): Promise<void> {
+        await this.request('POST', `/api/hierarchy/${contextPath}/file?path=${encodeURIComponent(filePath)}`, { content: '' });
+    }
+
+    async createDir(contextPath: string, dirPath: string): Promise<void> {
+        await this.request('POST', `/api/hierarchy/${contextPath}/mkdir?path=${encodeURIComponent(dirPath)}`);
+    }
+
+    async deleteEntry(contextPath: string, entryPath: string): Promise<void> {
+        await this.request('DELETE', `/api/hierarchy/${contextPath}/file?path=${encodeURIComponent(entryPath)}`);
+    }
+
     // --- Sessions ---
 
     async listSessionsByContext(): Promise<{ groups: ContextSessionGroup[]; total_active: number; total_exited: number }> {
@@ -211,5 +223,22 @@ export class TachikomaClient {
 
     getStreamUrl(): string {
         return `${this.baseUrl}/api/components/stream?token=${encodeURIComponent(this.token ?? '')}`;
+    }
+
+    async registerComputer(data: {
+        machine_id: string;
+        hostname: string;
+        node_type: string;
+        os_type: string;
+        os_version: string;
+        ip_addresses?: string[];
+        tachikoma_version?: string;
+        name?: string;
+    }): Promise<unknown> {
+        return this.request('POST', '/api/network/computers/register', data);
+    }
+
+    async computerHeartbeat(machineId: string): Promise<unknown> {
+        return this.request('POST', `/api/network/computers/${machineId}/heartbeat`);
     }
 }
