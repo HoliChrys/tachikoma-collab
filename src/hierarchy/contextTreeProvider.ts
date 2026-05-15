@@ -24,6 +24,10 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
         ];
     }
 
+    refresh(): void {
+        this._onDidChangeTreeData.fire(undefined);
+    }
+
     setClient(client: TachikomaClient | null): void {
         this.client = client;
         if (!client) this._onDidChangeTreeData.fire(undefined);
