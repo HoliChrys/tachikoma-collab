@@ -315,6 +315,39 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('tachikoma.refreshSessions', () => {
             sessionsProvider.refresh();
         }),
+        vscode.commands.registerCommand('tachikoma.openInWorkspace', async (node?: ContextNode) => {
+            if (!node?.path) return;
+            const ctxPath = node.contextPath ?? node.path;
+            const uri = vscode.Uri.parse(`${TACHIKOMA_SCHEME}://tachikoma/?ctx=${encodeURIComponent(ctxPath)}`);
+            const name = `tachikoma: ${ctxPath}`;
+            const existing = (vscode.workspace.workspaceFolders ?? []).find(
+                (f) => f.uri.scheme === TACHIKOMA_SCHEME && f.uri.query.includes(ctxPath),
+            );
+            if (!existing) {
+                vscode.workspace.updateWorkspaceFolders(
+                    (vscode.workspace.workspaceFolders ?? []).length, 0,
+                    { uri, name },
+                );
+            }
+            store.activateContext(ctxPath);
+        }),
+        vscode.commands.registerCommand('tachikoma.remoteTerminal', async (node?: ContextNode) => {
+            const client = authManager.getClient();
+            if (!client) { vscode.window.showErrorMessage('Not connected'); return; }
+            const ctxPath = node?.contextPath ?? node?.path ?? '';
+            const hostUrl = authManager.getHostUrl() ?? '';
+            const host = hostUrl ? new URL(hostUrl).hostname : 'localhost';
+            const userId = authManager.getUserId() ?? 'ubuntu';
+            const ctxDir = ctxPath
+                ? `/home/${userId}/tachikoma_monorepo/${ctxPath.replace(/\./g, '/')}`
+                : `/home/${userId}/tachikoma_monorepo`;
+            const term = vscode.window.createTerminal({
+                name: ctxPath ? `ssh · ${ctxPath}` : 'ssh · tachikoma',
+                shellPath: 'ssh',
+                shellArgs: ['-t', `${userId}@${host}`, `cd ${ctxDir} && exec $SHELL -l`],
+            });
+            term.show();
+        }),
         vscode.commands.registerCommand('tachikoma.newFile', async (node?: ContextNode) => {
             const client = authManager.getClient();
             if (!client) { vscode.window.showErrorMessage('Not connected'); return; }

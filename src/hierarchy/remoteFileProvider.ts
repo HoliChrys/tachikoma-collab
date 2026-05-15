@@ -74,18 +74,35 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
     }
 
     async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
-        const { filePath } = parseUri(uri);
+        const { contextPath, filePath } = parseUri(uri);
 
-        if (!filePath || filePath === '/') {
-            return { type: vscode.FileType.Directory, ctime: 0, mtime: 0, size: 0 };
+        if (!filePath || filePath === '/' || filePath === '.') {
+            return { type: vscode.FileType.Directory, ctime: 0, mtime: Date.now(), size: 0 };
         }
 
-        return {
-            type: vscode.FileType.File,
-            ctime: 0,
-            mtime: Date.now(),
-            size: 0,
-        };
+        if (!this.client) {
+            throw vscode.FileSystemError.Unavailable('Not connected');
+        }
+
+        const parentDir = filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/')) : '';
+        const baseName = filePath.includes('/') ? filePath.slice(filePath.lastIndexOf('/') + 1) : filePath;
+
+        try {
+            const entries = await this.client.listContextFiles(contextPath, parentDir);
+            const match = entries.find((e) => e.name === baseName);
+            if (!match) throw vscode.FileSystemError.FileNotFound(uri);
+            return {
+                type: (match.type === 'dir' || match.type === 'directory')
+                    ? vscode.FileType.Directory
+                    : vscode.FileType.File,
+                ctime: 0,
+                mtime: Date.now(),
+                size: match.size ?? 0,
+            };
+        } catch (err) {
+            if (err instanceof vscode.FileSystemError) throw err;
+            throw vscode.FileSystemError.FileNotFound(uri);
+        }
     }
 
     async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
@@ -155,8 +172,10 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
         }
     }
 
-    rename(): void {
-        throw vscode.FileSystemError.NoPermissions('Not supported yet');
+    async rename(oldUri: vscode.Uri, newUri: vscode.Uri): Promise<void> {
+        const content = await this.readFile(oldUri);
+        await this.writeFile(newUri, content, { create: true, overwrite: false });
+        await this.delete(oldUri);
     }
 }
 

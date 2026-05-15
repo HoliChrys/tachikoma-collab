@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -93,6 +93,16 @@
         "command": "tachikoma.deleteEntry",
         "title": "Delete",
         "icon": "$(trash)"
+      },
+      {
+        "command": "tachikoma.openInWorkspace",
+        "title": "Open in Workspace",
+        "icon": "$(root-folder-opened)"
+      },
+      {
+        "command": "tachikoma.remoteTerminal",
+        "title": "Open Remote Terminal",
+        "icon": "$(terminal)"
       }
     ],
     "keybindings": [
@@ -136,6 +146,16 @@
           "command": "tachikoma.newFolder",
           "when": "view == tachikomaContextTree && viewItem =~ /^(space|folder)$/",
           "group": "1_modification@2"
+        },
+        {
+          "command": "tachikoma.openInWorkspace",
+          "when": "view == tachikomaContextTree && viewItem =~ /^(galaxy|system|space)$/",
+          "group": "0_open@1"
+        },
+        {
+          "command": "tachikoma.remoteTerminal",
+          "when": "view == tachikomaContextTree && viewItem =~ /^(galaxy|system|space|folder)$/",
+          "group": "0_open@2"
         },
         {
           "command": "tachikoma.deleteEntry",
