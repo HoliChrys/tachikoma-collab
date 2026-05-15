@@ -159,7 +159,7 @@ export async function activate(context: vscode.ExtensionContext) {
             await cacheManager?.handleServerFileEvent(evt);
         });
 
-        // Register computer + heartbeat
+        // Register computer
         try {
             await client.registerComputer({
                 machine_id: machineId, hostname: os.hostname(),
@@ -167,9 +167,30 @@ export async function activate(context: vscode.ExtensionContext) {
                 os_type: os.platform(), os_version: os.release(),
             });
             log(`Computer registered: ${machineId}`);
-            if (heartbeatInterval) clearInterval(heartbeatInterval);
-            heartbeatInterval = setInterval(() => { client.computerHeartbeat(machineId).catch(() => {}); }, 120_000);
         } catch (err) { log(`Computer register failed (non-blocking): ${err}`); }
+
+        // Health check: ping server every 30s, auto-resync on reconnect
+        let serverWasDown = false;
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(async () => {
+            try {
+                await client.me();
+                client.computerHeartbeat(machineId).catch(() => {});
+                if (serverWasDown) {
+                    serverWasDown = false;
+                    log('Server back online — resyncing');
+                    authManager.setSyncState('syncing');
+                    await store.init(client, userId);
+                    authManager.setSyncState('synced');
+                }
+            } catch {
+                if (!serverWasDown) {
+                    serverWasDown = true;
+                    log('Server unreachable — marking stale');
+                    authManager.setSyncState('stale');
+                }
+            }
+        }, 30_000);
 
         void offerLocalDaemon(client);
 
