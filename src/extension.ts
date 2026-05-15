@@ -124,21 +124,13 @@ export async function activate(context: vscode.ExtensionContext) {
             hideFromUser: false,
         });
 
-        // Auto-install if needed, then run — zsh compatible
+        // Always pull latest + install, then run — zsh compatible
         const repo = '~/sandbox/tachikoma';
         const cmds = [
-            // Step 1: check if module exists
-            `if ! python -m tachikoma.local --help > /dev/null 2>&1; then`,
-            `  echo "📦 Installing tachikoma agent..."`,
-            `  if [ -d ${repo} ]; then`,
-            `    cd ${repo} && git pull`,
-            `  else`,
-            `    git clone https://github.com/HoliChrys/tachikoma.git ${repo}`,
-            `  fi`,
-            `  cd ${repo} && pip install -e . 2>&1 | tail -5`,
-            `  echo "✅ Installed"`,
+            `if [ ! -d ${repo} ]; then`,
+            `  git clone https://github.com/HoliChrys/tachikoma.git ${repo}`,
             `fi`,
-            // Step 2: run
+            `cd ${repo} && git pull -q && pip install -e . -q 2>&1 | tail -3`,
             `python -m tachikoma.local --server '${serverUrl}' --token '${token}' --port ${LOCAL_DAEMON_PORT}`,
         ];
 
