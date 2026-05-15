@@ -123,11 +123,26 @@ export async function activate(context: vscode.ExtensionContext) {
             name: 'Tachikoma Agent',
             hideFromUser: false,
         });
-        localDaemonTerminal.sendText(
+
+        // Auto-install: clone + pip install if module not found, then run
+        const repoDir = '~/sandbox/tachikoma';
+        const installAndRun = [
+            `python -m tachikoma.local --help > /dev/null 2>&1 || {`,
+            `  echo "📦 Installing tachikoma..."`,
+            `  if [ ! -d ${repoDir} ]; then`,
+            `    git clone https://github.com/HoliChrys/tachikoma.git ${repoDir}`,
+            `  else`,
+            `    cd ${repoDir} && git pull`,
+            `  fi`,
+            `  cd ${repoDir} && pip install -e . 2>&1 | tail -3`,
+            `  echo "✅ Installed"`,
+            `}`,
             `python -m tachikoma.local --server ${serverUrl} --token ${token} --port ${LOCAL_DAEMON_PORT}`,
-        );
+        ].join(' && ');
+
+        localDaemonTerminal.sendText(installAndRun);
         localDaemonTerminal.show(false);
-        log('Local daemon starting in terminal');
+        log('Local daemon: install check + start');
 
         // Poll until it's up
         for (let i = 0; i < 15; i++) {
