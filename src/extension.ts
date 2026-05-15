@@ -124,12 +124,27 @@ export async function activate(context: vscode.ExtensionContext) {
             hideFromUser: false,
         });
 
-        // Auto-install: clone + pip install if module not found, then run
-        // Uses ; instead of && with { } to stay compatible with zsh
-        const repoDir = '~/sandbox/tachikoma';
-        const installAndRun = `python -m tachikoma.local --help > /dev/null 2>&1 || (echo "📦 Installing tachikoma..."; test -d ${repoDir} && (cd ${repoDir}; git pull) || git clone https://github.com/HoliChrys/tachikoma.git ${repoDir}; cd ${repoDir}; pip install -e . 2>&1 | tail -3; echo "✅ Installed"); python -m tachikoma.local --server ${serverUrl} --token ${token} --port ${LOCAL_DAEMON_PORT}`;
+        // Auto-install if needed, then run — zsh compatible
+        const repo = '~/sandbox/tachikoma';
+        const cmds = [
+            // Step 1: check if module exists
+            `if ! python -m tachikoma.local --help > /dev/null 2>&1; then`,
+            `  echo "📦 Installing tachikoma agent..."`,
+            `  if [ -d ${repo} ]; then`,
+            `    cd ${repo} && git pull`,
+            `  else`,
+            `    git clone https://github.com/HoliChrys/tachikoma.git ${repo}`,
+            `  fi`,
+            `  cd ${repo} && pip install -e . 2>&1 | tail -5`,
+            `  echo "✅ Installed"`,
+            `fi`,
+            // Step 2: run
+            `python -m tachikoma.local --server '${serverUrl}' --token '${token}' --port ${LOCAL_DAEMON_PORT}`,
+        ];
 
-        localDaemonTerminal.sendText(installAndRun);
+        for (const cmd of cmds) {
+            localDaemonTerminal.sendText(cmd);
+        }
         localDaemonTerminal.show(false);
         log('Local daemon: install check + start');
 
