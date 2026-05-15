@@ -80,7 +80,44 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    let localDaemonTerminal: vscode.Terminal | null = null;
     const machineId = `vscode-${os.hostname()}-${os.userInfo().username}`;
+    const LOCAL_DAEMON_PORT = 9321;
+
+    async function checkLocalDaemon(): Promise<boolean> {
+        try {
+            const resp = await fetch(`http://127.0.0.1:${LOCAL_DAEMON_PORT}/health`, { signal: AbortSignal.timeout(2000) });
+            return resp.ok;
+        } catch {
+            return false;
+        }
+    }
+
+    async function offerLocalDaemon(client: import('./api/tachikomaClient').TachikomaClient): Promise<void> {
+        const daemonUp = await checkLocalDaemon();
+        if (daemonUp) {
+            log('Local daemon detected on :' + LOCAL_DAEMON_PORT);
+            return;
+        }
+
+        const answer = await vscode.window.showInformationMessage(
+            'Tachikoma local agent is not running. Start it?',
+            'Start agent', 'Skip',
+        );
+        if (answer !== 'Start agent') return;
+
+        const token = client.getToken() ?? '';
+        const serverUrl = client.baseUrl;
+        localDaemonTerminal = vscode.window.createTerminal({
+            name: 'Tachikoma Agent',
+            hideFromUser: false,
+        });
+        localDaemonTerminal.sendText(
+            `python -m tachikoma.local --server ${serverUrl} --token ${token} --port ${LOCAL_DAEMON_PORT}`,
+        );
+        localDaemonTerminal.show(false);
+        log('Local daemon starting in terminal');
+    }
 
     authManager.onDidConnect(async (client) => {
         log('Auth connected — initializing store');
@@ -117,12 +154,16 @@ export async function activate(context: vscode.ExtensionContext) {
             log(`Computer register failed (non-blocking): ${err}`);
         }
 
+        // Offer to start local daemon if not running
+        void offerLocalDaemon(client);
+
         await store.init(client, userId);
     });
 
     authManager.onDidDisconnect(() => {
         log('Auth disconnected — cleaning up');
         if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+        if (localDaemonTerminal) { localDaemonTerminal.dispose(); localDaemonTerminal = null; }
         remoteFileProvider.setEventBus(null);
         contextTree.setClient(null);
         remoteFileProvider.setClient(null);
