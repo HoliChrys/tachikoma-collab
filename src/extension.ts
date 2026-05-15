@@ -84,6 +84,23 @@ export async function activate(context: vscode.ExtensionContext) {
     const machineId = `vscode-${os.hostname()}-${os.userInfo().username}`;
     const LOCAL_DAEMON_PORT = 9321;
 
+    // Status bar toggle button
+    const daemonStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
+    daemonStatusBar.command = 'tachikoma.toggleDaemon';
+    daemonStatusBar.tooltip = 'Toggle Tachikoma local agent';
+    context.subscriptions.push(daemonStatusBar);
+
+    function updateDaemonStatusBar(running: boolean) {
+        if (running) {
+            daemonStatusBar.text = '$(vm-active) Agent';
+            daemonStatusBar.backgroundColor = undefined;
+        } else {
+            daemonStatusBar.text = '$(vm-outline) Agent';
+            daemonStatusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+        }
+        daemonStatusBar.show();
+    }
+
     async function checkLocalDaemon(): Promise<boolean> {
         try {
             const resp = await fetch(`http://127.0.0.1:${LOCAL_DAEMON_PORT}/health`, { signal: AbortSignal.timeout(2000) });
@@ -93,18 +110,12 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     }
 
-    async function offerLocalDaemon(client: import('./api/tachikomaClient').TachikomaClient): Promise<void> {
-        const daemonUp = await checkLocalDaemon();
-        if (daemonUp) {
-            log('Local daemon detected on :' + LOCAL_DAEMON_PORT);
+    async function startLocalDaemon(client: import('./api/tachikomaClient').TachikomaClient): Promise<void> {
+        if (await checkLocalDaemon()) {
+            log('Local daemon already running');
+            updateDaemonStatusBar(true);
             return;
         }
-
-        const answer = await vscode.window.showInformationMessage(
-            'Tachikoma local agent is not running. Start it?',
-            'Start agent', 'Skip',
-        );
-        if (answer !== 'Start agent') return;
 
         const token = client.getToken() ?? '';
         const serverUrl = client.baseUrl;
@@ -117,6 +128,47 @@ export async function activate(context: vscode.ExtensionContext) {
         );
         localDaemonTerminal.show(false);
         log('Local daemon starting in terminal');
+
+        // Poll until it's up
+        for (let i = 0; i < 15; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            if (await checkLocalDaemon()) {
+                updateDaemonStatusBar(true);
+                vscode.window.showInformationMessage('Tachikoma local agent started');
+                return;
+            }
+        }
+        updateDaemonStatusBar(false);
+    }
+
+    async function stopLocalDaemon(): Promise<void> {
+        if (localDaemonTerminal) {
+            localDaemonTerminal.dispose();
+            localDaemonTerminal = null;
+        }
+        // Also try HTTP shutdown
+        try {
+            await fetch(`http://127.0.0.1:${LOCAL_DAEMON_PORT}/shutdown`, { method: 'POST', signal: AbortSignal.timeout(2000) });
+        } catch { /* ignore */ }
+        updateDaemonStatusBar(false);
+        log('Local daemon stopped');
+    }
+
+    async function offerLocalDaemon(client: import('./api/tachikomaClient').TachikomaClient): Promise<void> {
+        const daemonUp = await checkLocalDaemon();
+        updateDaemonStatusBar(daemonUp);
+        if (daemonUp) {
+            log('Local daemon detected on :' + LOCAL_DAEMON_PORT);
+            return;
+        }
+
+        const answer = await vscode.window.showInformationMessage(
+            'Tachikoma local agent is not running. Start it?',
+            'Start agent', 'Skip',
+        );
+        if (answer === 'Start agent') {
+            await startLocalDaemon(client);
+        }
     }
 
     authManager.onDidConnect(async (client) => {
@@ -180,6 +232,20 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('tachikoma.showOutput', () => {
             getOutputChannel().show(true);
+        }),
+        vscode.commands.registerCommand('tachikoma.toggleDaemon', async () => {
+            const running = await checkLocalDaemon();
+            if (running) {
+                await stopLocalDaemon();
+                vscode.window.showInformationMessage('Tachikoma local agent stopped');
+            } else {
+                const client = authManager.getClient();
+                if (client) {
+                    await startLocalDaemon(client);
+                } else {
+                    vscode.window.showWarningMessage('Connect to tachikoma first');
+                }
+            }
         }),
         vscode.commands.registerCommand('tachikoma.openRemoteFile', async (node: ContextNode) => {
             if (!node.contextPath || !node.fsPath) return;

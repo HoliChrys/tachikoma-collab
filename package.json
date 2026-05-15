@@ -37,6 +37,11 @@
         "title": "Tachikoma: Disconnect"
       },
       {
+        "command": "tachikoma.toggleDaemon",
+        "title": "Tachikoma: Toggle Local Agent",
+        "icon": "$(vm-active)"
+      },
+      {
         "command": "tachikoma.showOutput",
         "title": "Tachikoma: Show Logs"
       },
@@ -73,6 +78,21 @@
       {
         "command": "tachikoma.copyWithReference",
         "title": "Tachikoma: Copy Selection with File Reference"
+      },
+      {
+        "command": "tachikoma.newFile",
+        "title": "New File",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "tachikoma.newFolder",
+        "title": "New Folder",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "tachikoma.deleteEntry",
+        "title": "Delete",
+        "icon": "$(trash)"
       }
     ],
     "keybindings": [
@@ -94,6 +114,33 @@
           "command": "tachikoma.toggleShowAllSessions",
           "when": "view == tachikomaSessions",
           "group": "navigation"
+        },
+        {
+          "command": "tachikoma.newFile",
+          "when": "view == tachikomaContextTree",
+          "group": "navigation"
+        },
+        {
+          "command": "tachikoma.newFolder",
+          "when": "view == tachikomaContextTree",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tachikoma.newFile",
+          "when": "view == tachikomaContextTree && viewItem =~ /^(space|folder)$/",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "tachikoma.newFolder",
+          "when": "view == tachikomaContextTree && viewItem =~ /^(space|folder)$/",
+          "group": "1_modification@2"
+        },
+        {
+          "command": "tachikoma.deleteEntry",
+          "when": "view == tachikomaContextTree && viewItem =~ /^(file|folder)$/",
+          "group": "2_danger@1"
         }
       ]
     },
