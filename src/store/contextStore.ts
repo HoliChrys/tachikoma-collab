@@ -34,6 +34,10 @@ export class ContextStore implements vscode.Disposable {
     private readonly _onContextFilesChanged = new vscode.EventEmitter<string>();
     readonly onContextFilesChanged = this._onContextFilesChanged.event;
 
+    /** Fires with detailed file event info for CacheManager sync. */
+    private readonly _onFileEvent = new vscode.EventEmitter<{ ctxPath: string; filePath: string; changeType: string }>();
+    readonly onFileEvent = this._onFileEvent.event;
+
     constructor(globalState: vscode.Memento) {
         this.cache = new PersistentCache(globalState);
     }
@@ -350,8 +354,13 @@ export class ContextStore implements vscode.Disposable {
             case 'file.content.update':
             case 'file.collab.activated': {
                 const ctxPath = (event.context_path ?? '') as string;
+                const filePath = ((event.file_path ?? event.path ?? '') as string);
+                const changeType = ((event.change_type ?? event.event_type ?? '') as string);
                 if (ctxPath) {
                     this._onContextFilesChanged.fire(ctxPath);
+                    if (filePath) {
+                        this._onFileEvent.fire({ ctxPath, filePath, changeType });
+                    }
                 }
                 break;
             }
@@ -602,6 +611,7 @@ export class ContextStore implements vscode.Disposable {
         this._onDidChange.dispose();
         this._onSyncStateChanged.dispose();
         this._onContextFilesChanged.dispose();
+        this._onFileEvent.dispose();
     }
 }
 
