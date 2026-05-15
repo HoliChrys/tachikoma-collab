@@ -82,6 +82,10 @@ class EventStreamIterator {
             'computer.discovered', 'computer.updated',
             'user.created', 'user.activated',
             'node.online', 'node.offline', 'node.heartbeat',
+            'file.created', 'file.modified', 'file.deleted',
+            'file.content.update', 'file.collab.activated',
+            'context.file_changed', 'context.access.granted', 'context.access.revoked',
+            'session.discovered', 'session.activated', 'session.suspended',
         ];
 
         for (const eventType of knownEventTypes) {

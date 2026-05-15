@@ -216,7 +216,7 @@ export class ContextStore implements vscode.Disposable {
                     // ACL
                     'context.access.granted', 'context.access.revoked',
                     // File changes
-                    'context.file_changed', 'file.created', 'file.deleted',
+                    'context.file_changed', 'file.created', 'file.modified', 'file.deleted',
                     'file.content.update', 'file.collab.activated',
                 ],
             },
