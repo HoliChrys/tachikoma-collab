@@ -32,16 +32,14 @@ export function attachTmuxSession(opts: {
 }
 
 /**
- * Zellij sessions → POST /command/login for auth, then load session_url.
+ * Zellij sessions → native VS Code terminal running:
+ *   zellij attach https://session.zweb.{ctx}.tachikoma.sh/{session} --token {token} --remember
  *
- * Uses the HTTPS subdomain (session.{ctx_id}.tachikoma.sh) served by
- * Traefik. Assets at /assets/* work natively since it's the domain root.
- * Auth is done via POST /command/login which sets a cookie, then the
- * page loads with is_authenticated=true.
+ * Opens in the terminal panel (bottom of VS Code).
+ * Direct zellij client connection — no SSH, no WebView, no iframe.
  */
 export async function attachZellijSession(opts: {
     client: TachikomaClient;
-    extensionUri: vscode.Uri;
     sessionName: string;
     ctxId?: string;
 }): Promise<void> {
@@ -51,18 +49,23 @@ export async function attachZellijSession(opts: {
     let zwToken: string;
 
     if (!ctxId) {
-        // Session name given (e.g. "remote-sdk") → resolve ctx + token
         const webData = await opts.client.getSessionWeb(opts.sessionName);
         ctxId = webData.ctx_id;
         zwToken = webData.token;
     } else {
-        // ctx_id given directly (e.g. from "Zellij Web" entry) → resolve via web-info
         const webInfo = await opts.client.getSessionWebInfo(ctxId);
         zwToken = webInfo.token;
     }
 
-    const url = `https://session.zweb.${ctxId}.tachikoma.sh/${opts.sessionName}?auth_token=${encodeURIComponent(zwToken)}`;
+    const serverUrl = `https://session.zweb.${ctxId}.tachikoma.sh/${opts.sessionName}`;
+    const cmd = `zellij attach ${serverUrl} --token ${zwToken} --remember`;
 
-    log(`Zellij open: ${opts.sessionName} → ${url}`);
-    await vscode.commands.executeCommand('simpleBrowser.show', vscode.Uri.parse(url));
+    log(`Zellij terminal: ${cmd}`);
+
+    const term = vscode.window.createTerminal({
+        name: `zellij · ${opts.sessionName}`,
+        iconPath: new vscode.ThemeIcon('terminal'),
+    });
+    term.sendText(cmd);
+    term.show();
 }

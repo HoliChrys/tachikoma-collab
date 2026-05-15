@@ -143,29 +143,15 @@ export async function activate(context: vscode.ExtensionContext) {
                     sessionName: node.name,
                 });
             } else if (node.kind === 'session' && node.sessionType === 'zellij') {
-                await attachZellijSession({
-                    client,
-                    extensionUri: context.extensionUri,
-                    sessionName: node.name,
-                });
+                await attachZellijSession({ client, sessionName: node.name });
             } else if (node.kind === 'zellij') {
-                await attachZellijSession({
-                    client,
-                    extensionUri: context.extensionUri,
-                    sessionName: node.parentCtxId,
-                    ctxId: node.parentCtxId,
-                });
+                await attachZellijSession({ client, sessionName: node.parentCtxId, ctxId: node.parentCtxId });
             }
         }),
         vscode.commands.registerCommand('tachikoma.openZellij', async (node: ZellijEntry) => {
             const client = authManager.getClient();
             if (!client) return;
-            await attachZellijSession({
-                client,
-                extensionUri: context.extensionUri,
-                sessionName: node.parentCtxId,
-                ctxId: node.parentCtxId,
-            });
+            await attachZellijSession({ client, sessionName: node.parentCtxId, ctxId: node.parentCtxId });
         }),
         vscode.commands.registerCommand('tachikoma.refreshSessions', () => {
             sessionsProvider.refresh();
