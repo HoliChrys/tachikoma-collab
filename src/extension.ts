@@ -202,7 +202,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // Wire file watching SSE for bidirectional sync
         const fileEventBus = new EventBus({ token: client.getToken() ?? '', baseUrl: client.baseUrl });
         remoteFileProvider.setEventBus(fileEventBus);
-        remoteFileProvider.watch();
+        remoteFileProvider.startWatching();
 
         // Register this VS Code instance as a local computer
         try {

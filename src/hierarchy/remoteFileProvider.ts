@@ -15,6 +15,8 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
     private client: TachikomaClient | null = null;
     private eventBus: EventBus | null = null;
     private watchDisposable: vscode.Disposable | null = null;
+    private statCache = new Map<string, { stat: vscode.FileStat; ts: number }>();
+    private static STAT_TTL = 5_000;
 
     private _onDidChangeFile = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
     readonly onDidChangeFile = this._onDidChangeFile.event;
@@ -31,7 +33,11 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
         this.eventBus = eventBus;
     }
 
-    watch(): vscode.Disposable {
+    watch(_uri: vscode.Uri, _options: { readonly recursive: boolean; readonly excludes: readonly string[] }): vscode.Disposable {
+        return new vscode.Disposable(() => {});
+    }
+
+    startWatching(): vscode.Disposable {
         if (!this.eventBus) return new vscode.Disposable(() => {});
 
         const stream = this.eventBus.subscribe({
@@ -62,6 +68,7 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
                         type = vscode.FileChangeType.Changed;
                     }
 
+                    this.statCache.delete(`${ctxPath}::${filePath}`);
                     this._onDidChangeFile.fire([{ type, uri }]);
                 }
             } catch {
@@ -80,6 +87,12 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
             return { type: vscode.FileType.Directory, ctime: 0, mtime: Date.now(), size: 0 };
         }
 
+        const cacheKey = `${contextPath}::${filePath}`;
+        const cached = this.statCache.get(cacheKey);
+        if (cached && Date.now() - cached.ts < RemoteFileProvider.STAT_TTL) {
+            return cached.stat;
+        }
+
         if (!this.client) {
             throw vscode.FileSystemError.Unavailable('Not connected');
         }
@@ -91,7 +104,7 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
             const entries = await this.client.listContextFiles(contextPath, parentDir);
             const match = entries.find((e) => e.name === baseName);
             if (!match) throw vscode.FileSystemError.FileNotFound(uri);
-            return {
+            const result: vscode.FileStat = {
                 type: (match.type === 'dir' || match.type === 'directory')
                     ? vscode.FileType.Directory
                     : vscode.FileType.File,
@@ -99,10 +112,16 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
                 mtime: Date.now(),
                 size: match.size ?? 0,
             };
+            this.statCache.set(cacheKey, { stat: result, ts: Date.now() });
+            return result;
         } catch (err) {
             if (err instanceof vscode.FileSystemError) throw err;
             throw vscode.FileSystemError.FileNotFound(uri);
         }
+    }
+
+    invalidateStat(contextPath: string, filePath: string): void {
+        this.statCache.delete(`${contextPath}::${filePath}`);
     }
 
     async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
@@ -134,13 +153,14 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
         }
     }
 
-    async writeFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {
+    async writeFile(uri: vscode.Uri, content: Uint8Array, _options?: { create?: boolean; overwrite?: boolean }): Promise<void> {
         if (!this.client) throw vscode.FileSystemError.Unavailable('Not connected');
         const { contextPath, filePath } = parseUri(uri);
         const text = new TextDecoder().decode(content);
         log(`Saving ${contextPath}/${filePath} (${content.length} bytes)`);
         try {
             await this.client.writeFile(contextPath, filePath, text);
+            this.statCache.delete(`${contextPath}::${filePath}`);
             log(`Saved ${contextPath}/${filePath}`);
         } catch (err) {
             logError(`Save failed ${contextPath}/${filePath}`, err);
@@ -160,7 +180,7 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
         }
     }
 
-    async delete(uri: vscode.Uri): Promise<void> {
+    async delete(uri: vscode.Uri, _options?: { recursive?: boolean }): Promise<void> {
         if (!this.client) throw vscode.FileSystemError.Unavailable('Not connected');
         const { contextPath, filePath } = parseUri(uri);
         log(`Deleting ${contextPath}/${filePath}`);
@@ -172,9 +192,9 @@ export class RemoteFileProvider implements vscode.FileSystemProvider {
         }
     }
 
-    async rename(oldUri: vscode.Uri, newUri: vscode.Uri): Promise<void> {
+    async rename(oldUri: vscode.Uri, newUri: vscode.Uri, _options?: { overwrite?: boolean }): Promise<void> {
         const content = await this.readFile(oldUri);
-        await this.writeFile(newUri, content, { create: true, overwrite: false });
+        await this.writeFile(newUri, content, { create: true, overwrite: true });
         await this.delete(oldUri);
     }
 }
