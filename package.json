@@ -46,6 +46,11 @@
         "icon": "$(vm-active)"
       },
       {
+        "command": "tachikoma.openLocalTerminal",
+        "title": "Tachikoma: Open Local Terminal",
+        "icon": "$(terminal)"
+      },
+      {
         "command": "tachikoma.showOutput",
         "title": "Tachikoma: Show Logs"
       },

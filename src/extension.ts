@@ -9,6 +9,7 @@ import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
 import { SessionsProvider, type SessionEntry, type ZellijEntry } from './sessions/sessionsProvider';
 import { attachZellijSession, attachTmuxSession } from './sessions/sessionAttacher';
 import { log, getOutputChannel } from './log';
+import { openLocalTerminalPanel } from './terminal/terminalPanel';
 import type { ContextNode } from './types';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -209,6 +210,19 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (client) await startLocalDaemon(client);
                 else vscode.window.showWarningMessage('Connect to tachikoma first');
             }
+        }),
+        vscode.commands.registerCommand('tachikoma.openLocalTerminal', async () => {
+            const daemonUp = await checkLocalDaemon();
+            if (!daemonUp) {
+                vscode.window.showWarningMessage('Local agent not running. Start it first.');
+                return;
+            }
+            const sessionId = `local-${Date.now().toString(36)}`;
+            openLocalTerminalPanel({
+                extensionUri: context.extensionUri,
+                title: `Local Terminal`,
+                sessionId,
+            });
         }),
 
         // Open file from context tree → sync to cache then open local file

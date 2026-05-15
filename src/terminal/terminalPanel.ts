@@ -63,6 +63,30 @@ export function openTerminalPanel(opts: {
     return panel;
 }
 
+/**
+ * Opens a local terminal panel connected to the tachikoma local daemon's
+ * WebSocket PTY endpoint at ws://127.0.0.1:{port}/ws/pty/{sessionId}.
+ */
+export function openLocalTerminalPanel(opts: {
+    extensionUri: vscode.Uri;
+    title: string;
+    sessionId: string;
+    daemonPort?: number;
+    cols?: number;
+    rows?: number;
+}): vscode.WebviewPanel {
+    const port = opts.daemonPort ?? 9321;
+    const wsUrl = `ws://127.0.0.1:${port}/ws/pty/${opts.sessionId}`;
+    return openTerminalPanel({
+        extensionUri: opts.extensionUri,
+        title: opts.title,
+        wsUrl,
+        token: '',
+        cols: opts.cols,
+        rows: opts.rows,
+    });
+}
+
 function getTerminalHtml(opts: {
     xtermCss: string;
     xtermJs: string;
