@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -35,6 +35,10 @@
       {
         "command": "tachikoma.disconnect",
         "title": "Tachikoma: Disconnect"
+      },
+      {
+        "command": "tachikoma.getMcpSession",
+        "title": "Tachikoma: Get MCP Session (for MCP marketplace)"
       },
       {
         "command": "tachikoma.toggleDaemon",

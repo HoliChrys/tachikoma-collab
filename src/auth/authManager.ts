@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs';
 import { TachikomaClient } from '../api/tachikomaClient';
 import { log, logError, showAndLog, getOutputChannel } from '../log';
 
@@ -126,6 +129,7 @@ export class AuthManager implements vscode.Disposable {
 
             this.startTokenRefresh();
             this.updateStatusBar();
+            this.writeMcpSession();
             this._onDidConnect.fire(client);
 
             showAndLog(`Connected to ${host} as ${resp.user_id} [${resp.roles.join(', ')}]`);
@@ -162,6 +166,7 @@ export class AuthManager implements vscode.Disposable {
             await context.secrets.store('tachikoma.token', refreshed.token);
             this.startTokenRefresh();
             this.updateStatusBar();
+            this.writeMcpSession();
             this._onDidConnect.fire(client);
             log(`Reconnected as ${refreshed.user_id}`);
             return client;
@@ -182,6 +187,7 @@ export class AuthManager implements vscode.Disposable {
         this.stopTokenRefresh();
         await context.secrets.delete('tachikoma.token');
         this.updateStatusBar();
+        this.writeMcpSession();
         this._onDidDisconnect.fire();
         log('Disconnected');
     }
@@ -235,6 +241,38 @@ export class AuthManager implements vscode.Disposable {
             this.statusBarItem.text = '$(debug-disconnect) Tachikoma: Disconnected';
             this.statusBarItem.tooltip = 'Click to connect to a Tachikoma computer';
             this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+        }
+    }
+
+    getMcpSession(): { host: string; token: string; userId: string } | null {
+        if (!this.isConnected() || !this.hostUrl || !this.client) return null;
+        const token = this.client.getToken();
+        if (!token) return null;
+        return { host: this.hostUrl, token, userId: this.userId ?? '' };
+    }
+
+    writeMcpSession(activeContexts?: string[]): void {
+        const session = this.getMcpSession();
+        const dir = path.join(os.homedir(), '.tachikoma');
+        const file = path.join(dir, 'mcp-session.json');
+        try {
+            fs.mkdirSync(dir, { recursive: true });
+            if (session) {
+                const data = {
+                    host: session.host,
+                    token: session.token,
+                    userId: session.userId,
+                    sseUrl: `${session.host}/api/mcp/sse`,
+                    activeContexts: activeContexts ?? [],
+                    updatedAt: new Date().toISOString(),
+                };
+                fs.writeFileSync(file, JSON.stringify(data, null, 2), { mode: 0o600 });
+                log(`MCP session written to ${file}`);
+            } else {
+                if (fs.existsSync(file)) fs.unlinkSync(file);
+            }
+        } catch (err) {
+            logError('Failed to write MCP session file', err);
         }
     }
 

@@ -3,7 +3,6 @@ import * as os from 'os';
 import { AuthManager } from './auth/authManager';
 import { ContextStore } from './store/contextStore';
 import { ContextTreeProvider } from './hierarchy/contextTreeProvider';
-import { RemoteFileProvider, TACHIKOMA_SCHEME } from './hierarchy/remoteFileProvider';
 import { CacheManager } from './cache/cacheManager';
 import { CollaborationManager } from './collaborative/collaborationManager';
 import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
@@ -18,7 +17,6 @@ export async function activate(context: vscode.ExtensionContext) {
     const authManager = new AuthManager();
     const store = new ContextStore(context.globalState);
     const contextTree = new ContextTreeProvider();
-    const remoteFileProvider = new RemoteFileProvider();
     const collabManager = new CollaborationManager();
     const collaboratorsProvider = new CollaboratorsProvider();
     const sessionsProvider = new SessionsProvider();
@@ -31,13 +29,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     store.onSyncStateChanged((s) => authManager.setSyncState(s));
 
-    // Keep tachikoma:// scheme registered as a stub for backward compat with deep links
-    context.subscriptions.push(
-        vscode.workspace.registerFileSystemProvider(TACHIKOMA_SCHEME, remoteFileProvider, {
-            isCaseSensitive: true,
-        }),
-    );
-
     const contextTreeView = vscode.window.createTreeView('tachikomaContextTree', {
         treeDataProvider: contextTree,
     });
@@ -48,10 +39,6 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     function contextFromUri(uri: vscode.Uri): string | undefined {
-        if (uri.scheme === TACHIKOMA_SCHEME) {
-            const params = new URLSearchParams(uri.query);
-            return params.get('ctx') || uri.authority;
-        }
         if (uri.scheme === 'file' && cacheManager) {
             return cacheManager.localPathToContext(uri.fsPath)?.contextPath;
         }
@@ -84,6 +71,10 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }),
     );
+
+    store.onDidChange(() => {
+        authManager.writeMcpSession(store.getActiveContextPaths());
+    });
 
     let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
     let localDaemonTerminal: vscode.Terminal | null = null;
@@ -201,6 +192,15 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('tachikoma.connect', () => authManager.connect(context)),
         vscode.commands.registerCommand('tachikoma.disconnect', () => authManager.disconnect(context)),
         vscode.commands.registerCommand('tachikoma.showOutput', () => getOutputChannel().show(true)),
+        vscode.commands.registerCommand('tachikoma.getMcpSession', () => {
+            const session = authManager.getMcpSession();
+            if (!session) return null;
+            return {
+                ...session,
+                sseUrl: `${session.host}/api/mcp/sse`,
+                activeContexts: store.getActiveContextPaths(),
+            };
+        }),
         vscode.commands.registerCommand('tachikoma.toggleDaemon', async () => {
             const running = await checkLocalDaemon();
             if (running) { await stopLocalDaemon(); vscode.window.showInformationMessage('Tachikoma local agent stopped'); }
