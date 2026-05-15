@@ -125,20 +125,9 @@ export async function activate(context: vscode.ExtensionContext) {
         });
 
         // Auto-install: clone + pip install if module not found, then run
+        // Uses ; instead of && with { } to stay compatible with zsh
         const repoDir = '~/sandbox/tachikoma';
-        const installAndRun = [
-            `python -m tachikoma.local --help > /dev/null 2>&1 || {`,
-            `  echo "📦 Installing tachikoma..."`,
-            `  if [ ! -d ${repoDir} ]; then`,
-            `    git clone https://github.com/HoliChrys/tachikoma.git ${repoDir}`,
-            `  else`,
-            `    cd ${repoDir} && git pull`,
-            `  fi`,
-            `  cd ${repoDir} && pip install -e . 2>&1 | tail -3`,
-            `  echo "✅ Installed"`,
-            `}`,
-            `python -m tachikoma.local --server ${serverUrl} --token ${token} --port ${LOCAL_DAEMON_PORT}`,
-        ].join(' && ');
+        const installAndRun = `python -m tachikoma.local --help > /dev/null 2>&1 || (echo "📦 Installing tachikoma..."; test -d ${repoDir} && (cd ${repoDir}; git pull) || git clone https://github.com/HoliChrys/tachikoma.git ${repoDir}; cd ${repoDir}; pip install -e . 2>&1 | tail -3; echo "✅ Installed"); python -m tachikoma.local --server ${serverUrl} --token ${token} --port ${LOCAL_DAEMON_PORT}`;
 
         localDaemonTerminal.sendText(installAndRun);
         localDaemonTerminal.show(false);
