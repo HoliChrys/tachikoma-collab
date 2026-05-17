@@ -185,22 +185,47 @@ export class AuthManager implements vscode.Disposable {
         log(`Reconnecting to ${host}...`);
         const client = new TachikomaClient(host);
         client.setToken(token);
+
+        // Step 1: try /me with stored token — this validates without rotating
         try {
-            const refreshed = await client.refreshToken();
+            const me = await client.me();
             this.client = client;
-            this.userId = refreshed.user_id;
+            this.userId = me.user_id;
             this.hostUrl = host;
-            await context.secrets.store('tachikoma.token', refreshed.token);
             this.startTokenRefresh();
             this.updateStatusBar();
             this.writeMcpSession();
             this._onDidConnect.fire(client);
-            log(`Reconnected as ${refreshed.user_id}`);
+            log(`Reconnected as ${me.user_id} (token still valid)`);
+            // Try to refresh in background (non-blocking) — extends session
+            void client.refreshToken().then(async (r) => {
+                if (r?.token) await context.secrets.store('tachikoma.token', r.token);
+            }).catch(() => {});
             return client;
-        } catch (err) {
-            logError('Reconnect failed — saved token expired', err);
+        } catch (err: unknown) {
+            // Distinguish "token rejected" (401) from "server unreachable"
+            const msg = err instanceof Error ? err.message : String(err);
+            const isAuthError = msg.includes('401') || msg.includes('Unauthorized') || msg.includes('Invalid');
+            if (isAuthError) {
+                log('Stored token rejected (401) — clearing');
+                await context.secrets.delete('tachikoma.token');
+                return null;
+            }
+            // Server unreachable — keep token, schedule retry in 30s
+            log(`Reconnect failed (server unreachable): ${msg}. Will retry in 30s.`);
+            this.scheduleReconnectRetry(context);
             return null;
         }
+    }
+
+    private reconnectRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    private scheduleReconnectRetry(context: vscode.ExtensionContext): void {
+        if (this.reconnectRetryTimer) clearTimeout(this.reconnectRetryTimer);
+        this.reconnectRetryTimer = setTimeout(() => {
+            this.reconnectRetryTimer = null;
+            if (!this.client) void this.tryReconnect(context);
+        }, 30_000);
     }
 
     async disconnect(context: vscode.ExtensionContext): Promise<void> {
