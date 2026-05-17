@@ -488,10 +488,10 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
     );
 
-    if (config.get<boolean>('autoConnect')) {
-        log('Auto-connect enabled, attempting reconnect...');
-        void authManager.tryReconnect(context);
-    }
+    // Always try to reconnect on activation if a session token is stored.
+    // The token is valid for 24h and the refresh API extends it — session persists across reloads.
+    log('Attempting to restore session from stored token...');
+    void authManager.tryReconnect(context);
 
     context.subscriptions.push(authManager, store, collabManager, sessionsProvider, getOutputChannel());
     log('Tachikoma extension activated');

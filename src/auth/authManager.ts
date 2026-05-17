@@ -21,6 +21,7 @@ export class AuthManager implements vscode.Disposable {
     private userId: string | null = null;
     private hostUrl: string | null = null;
     private activeContextsProvider: (() => string[]) | null = null;
+    private extContext: vscode.ExtensionContext | null = null;
 
     private readonly _onDidConnect = new vscode.EventEmitter<TachikomaClient>();
     readonly onDidConnect = this._onDidConnect.event;
@@ -66,6 +67,7 @@ export class AuthManager implements vscode.Disposable {
     }
 
     async connect(context: vscode.ExtensionContext): Promise<TachikomaClient | null> {
+        this.extContext = context;
         const channel = getOutputChannel();
         channel.show(true);
 
@@ -172,6 +174,7 @@ export class AuthManager implements vscode.Disposable {
     }
 
     async tryReconnect(context: vscode.ExtensionContext): Promise<TachikomaClient | null> {
+        this.extContext = context;
         const host = await context.secrets.get('tachikoma.host');
         const token = await context.secrets.get('tachikoma.token');
         if (!host || !token) {
@@ -221,7 +224,11 @@ export class AuthManager implements vscode.Disposable {
         this.refreshTimer = setInterval(async () => {
             if (!this.client) return;
             try {
-                await this.client.refreshToken();
+                const refreshed = await this.client.refreshToken();
+                // Persist rotated token to secrets so it survives VS Code reloads
+                if (this.extContext && refreshed?.token) {
+                    await this.extContext.secrets.store('tachikoma.token', refreshed.token);
+                }
                 // Persist the rotated token to ~/.tachikoma/mcp-session.json
                 // so the MCP bridge picks it up — otherwise the bridge would
                 // keep retrying with an expired token until the next manual
