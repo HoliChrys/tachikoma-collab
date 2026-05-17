@@ -5,12 +5,22 @@ import * as fs from 'fs';
 import { TachikomaClient } from '../api/tachikomaClient';
 import { log, logError, showAndLog, getOutputChannel } from '../log';
 
+export interface McpSession {
+    host: string;
+    token: string;
+    userId: string;
+    sseUrl: string;
+    activeContexts: string[];
+    updatedAt: string;
+}
+
 export class AuthManager implements vscode.Disposable {
     private client: TachikomaClient | null = null;
     private statusBarItem: vscode.StatusBarItem;
     private refreshTimer: ReturnType<typeof setInterval> | null = null;
     private userId: string | null = null;
     private hostUrl: string | null = null;
+    private activeContextsProvider: (() => string[]) | null = null;
 
     private readonly _onDidConnect = new vscode.EventEmitter<TachikomaClient>();
     readonly onDidConnect = this._onDidConnect.event;
@@ -39,6 +49,20 @@ export class AuthManager implements vscode.Disposable {
 
     getHostUrl(): string | null {
         return this.hostUrl;
+    }
+
+    /** Late-binding hook so authManager can read the current active contexts
+     * from the context store without taking a hard dependency on it. */
+    setActiveContextsProvider(provider: () => string[]): void {
+        this.activeContextsProvider = provider;
+    }
+
+    private currentActiveContexts(): string[] {
+        try {
+            return this.activeContextsProvider?.() ?? [];
+        } catch {
+            return [];
+        }
     }
 
     async connect(context: vscode.ExtensionContext): Promise<TachikomaClient | null> {
@@ -198,6 +222,11 @@ export class AuthManager implements vscode.Disposable {
             if (!this.client) return;
             try {
                 await this.client.refreshToken();
+                // Persist the rotated token to ~/.tachikoma/mcp-session.json
+                // so the MCP bridge picks it up — otherwise the bridge would
+                // keep retrying with an expired token until the next manual
+                // reconnect.
+                this.writeMcpSession();
             } catch (err) {
                 logError('Token refresh failed', err);
                 this.updateStatusBar();
@@ -234,8 +263,15 @@ export class AuthManager implements vscode.Disposable {
         }
         if (this.isConnected()) {
             const sync = this.syncStateLabel ? ` · ${this.syncStateLabel}` : '';
-            this.statusBarItem.text = `$(plug) Tachikoma: ${this.userId}${sync}`;
-            this.statusBarItem.tooltip = `Connected to ${this.hostUrl} as ${this.userId}\nClick to reconnect`;
+            const mcpFresh = this.isMcpSessionFresh();
+            const mcp = mcpFresh ? ' · $(zap)' : '';
+            this.statusBarItem.text = `$(plug) Tachikoma: ${this.userId}${mcp}${sync}`;
+            const contexts = this.currentActiveContexts();
+            const mcpLine = mcpFresh
+                ? `\nMCP session: live (${contexts.length} active context${contexts.length === 1 ? '' : 's'})`
+                : '';
+            this.statusBarItem.tooltip =
+                `Connected to ${this.hostUrl} as ${this.userId}${mcpLine}\nClick to reconnect`;
             this.statusBarItem.backgroundColor = undefined;
         } else {
             this.statusBarItem.text = '$(debug-disconnect) Tachikoma: Disconnected';
@@ -244,11 +280,21 @@ export class AuthManager implements vscode.Disposable {
         }
     }
 
-    getMcpSession(): { host: string; token: string; userId: string } | null {
+    /** Build the full MCP session — the same shape the bridge consumes. Used
+     * both by the ``tachikoma.getMcpSession`` command (for the MCP extension
+     * to read) and by writeMcpSession below. */
+    getMcpSession(): McpSession | null {
         if (!this.isConnected() || !this.hostUrl || !this.client) return null;
         const token = this.client.getToken();
         if (!token) return null;
-        return { host: this.hostUrl, token, userId: this.userId ?? '' };
+        return {
+            host: this.hostUrl,
+            token,
+            userId: this.userId ?? '',
+            sseUrl: `${this.hostUrl}/api/mcp/sse`,
+            activeContexts: this.currentActiveContexts(),
+            updatedAt: new Date().toISOString(),
+        };
     }
 
     writeMcpSession(activeContexts?: string[]): void {
@@ -258,21 +304,34 @@ export class AuthManager implements vscode.Disposable {
         try {
             fs.mkdirSync(dir, { recursive: true });
             if (session) {
-                const data = {
-                    host: session.host,
-                    token: session.token,
-                    userId: session.userId,
-                    sseUrl: `${session.host}/api/mcp/sse`,
-                    activeContexts: activeContexts ?? [],
-                    updatedAt: new Date().toISOString(),
-                };
-                fs.writeFileSync(file, JSON.stringify(data, null, 2), { mode: 0o600 });
-                log(`MCP session written to ${file}`);
+                // activeContexts override: callers can pass an explicit list
+                // (used by store.onDidChange in the extension wiring).
+                const final: McpSession = activeContexts !== undefined
+                    ? { ...session, activeContexts }
+                    : session;
+                const tmp = `${file}.tmp`;
+                fs.writeFileSync(tmp, JSON.stringify(final, null, 2), { mode: 0o600 });
+                fs.renameSync(tmp, file);
+                log(`MCP session written to ${file} (token=${final.token.slice(0, 8)}…, contexts=${final.activeContexts.length})`);
             } else {
                 if (fs.existsSync(file)) fs.unlinkSync(file);
             }
+            this.updateStatusBar();
         } catch (err) {
             logError('Failed to write MCP session file', err);
+        }
+    }
+
+    /** Returns true if a session file exists and was refreshed in the last
+     * 15 minutes (well under the 24h token TTL). Used to gate the `$(zap)`
+     * MCP indicator on the status bar. */
+    private isMcpSessionFresh(): boolean {
+        const file = path.join(os.homedir(), '.tachikoma', 'mcp-session.json');
+        try {
+            const stat = fs.statSync(file);
+            return Date.now() - stat.mtimeMs < 15 * 60 * 1000;
+        } catch {
+            return false;
         }
     }
 

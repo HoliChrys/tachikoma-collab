@@ -78,9 +78,15 @@ export class ContextTreeProvider implements vscode.TreeDataProvider<ContextNode>
         if (isCtx) {
             const node = this.store?.getNode(element.path);
             const activeCount = node?.activeUsers.size ?? 0;
-            item.description = activeCount > 0
-                ? `${element.type} · ${activeCount} active`
-                : element.type;
+            const parts: string[] = [element.type];
+            if (isActive) parts.push('$(zap) MCP scope');
+            if (activeCount > 0) parts.push(`${activeCount} active`);
+            item.description = parts.join(' · ');
+            const baseTooltip = element.path;
+            const mcpHint = isActive
+                ? '\n\n⚡ MCP scope active — agent tools default to this context.'
+                : '';
+            item.tooltip = new vscode.MarkdownString(baseTooltip + mcpHint);
         }
 
         item.contextValue = element.type;

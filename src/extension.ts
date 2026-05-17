@@ -73,6 +73,11 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
     );
 
+    // Let authManager read the live active contexts at any time (token
+    // refresh, status bar update, getMcpSession command) without taking a
+    // hard dependency on the store.
+    authManager.setActiveContextsProvider(() => store.getActiveContextPaths());
+
     store.onDidChange(() => {
         authManager.writeMcpSession(store.getActiveContextPaths());
     });
