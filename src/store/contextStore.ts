@@ -18,6 +18,7 @@ export class ContextStore implements vscode.Disposable {
 
     private client: TachikomaClient | null = null;
     private eventBus: EventBus | null = null;
+    private currentStream: { close(): void } | null = null;
     private cache: PersistentCache;
     private myUserId = '';
     private host = '';
@@ -203,6 +204,12 @@ export class ContextStore implements vscode.Disposable {
         const token = this.client.getToken();
         if (!token) return;
 
+        // Close any existing stream before opening a new one (prevents zombie listeners)
+        if (this.currentStream) {
+            try { this.currentStream.close(); } catch { /* ignore */ }
+            this.currentStream = null;
+        }
+
         this.eventBus = new EventBus({ token, baseUrl: this.client.baseUrl });
         const stream = this.eventBus.subscribe(
             {
@@ -229,6 +236,8 @@ export class ContextStore implements vscode.Disposable {
                 else if (!connected) this.setState('stale');
             },
         );
+
+        this.currentStream = stream;
 
         void (async () => {
             try {

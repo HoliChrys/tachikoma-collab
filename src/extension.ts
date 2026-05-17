@@ -181,6 +181,18 @@ export async function activate(context: vscode.ExtensionContext) {
                     log('Server back online — resyncing');
                     authManager.setSyncState('syncing');
                     await store.init(client, userId);
+                    // Reconnect collab manager (separate SSE connection)
+                    collabManager.disconnect();
+                    collabManager.connect(client, userId, userId);
+                    // Re-trigger collaboration for all open documents to re-broadcast participant join
+                    if (config.get<boolean>('autoCollab', true)) {
+                        for (const doc of vscode.workspace.textDocuments) {
+                            const ctx = contextFromUri(doc.uri);
+                            if (ctx) {
+                                void collabManager.startCollaborating(doc).catch(() => {});
+                            }
+                        }
+                    }
                     authManager.setSyncState('synced');
                 }
             } catch {
