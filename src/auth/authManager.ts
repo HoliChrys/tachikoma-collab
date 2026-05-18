@@ -29,10 +29,20 @@ export class AuthManager implements vscode.Disposable {
     private readonly _onDidDisconnect = new vscode.EventEmitter<void>();
     readonly onDidDisconnect = this._onDidDisconnect.event;
 
+    /** Set to true once tryReconnect has produced a verdict (success or
+     * confirmed-no-stored-session). Until then the status bar shows
+     * "Restoring…" instead of "Disconnected", so users don't see a flash
+     * of "disconnected" between activate() and the async SecretStorage
+     * lookup completing. */
+    private hasResolvedInitialState = false;
+
     constructor() {
         this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
         this.statusBarItem.command = 'tachikoma.connect';
-        this.updateStatusBar();
+        // Initial state — "restoring" rather than "disconnected" so reloads
+        // don't show a misleading flash before tryReconnect resolves.
+        this.statusBarItem.text = '$(loading~spin) Tachikoma: Restoring…';
+        this.statusBarItem.tooltip = 'Restoring previous session…';
         this.statusBarItem.show();
     }
 
@@ -175,47 +185,99 @@ export class AuthManager implements vscode.Disposable {
 
     async tryReconnect(context: vscode.ExtensionContext): Promise<TachikomaClient | null> {
         this.extContext = context;
-        const host = await context.secrets.get('tachikoma.host');
+        const secretHost = await context.secrets.get('tachikoma.host');
         const token = await context.secrets.get('tachikoma.token');
-        if (!host || !token) {
+
+        if (!token) {
             log('No saved session to reconnect');
-            return null;
-        }
-
-        log(`Reconnecting to ${host}...`);
-        const client = new TachikomaClient(host);
-        client.setToken(token);
-
-        // Step 1: try /me with stored token — this validates without rotating
-        try {
-            const me = await client.me();
-            this.client = client;
-            this.userId = me.user_id;
-            this.hostUrl = host;
-            this.startTokenRefresh();
+            this.hasResolvedInitialState = true;
             this.updateStatusBar();
-            this.writeMcpSession();
-            this._onDidConnect.fire(client);
-            log(`Reconnected as ${me.user_id} (token still valid)`);
-            // Try to refresh in background (non-blocking) — extends session
-            void client.refreshToken().then(async (r) => {
-                if (r?.token) await context.secrets.store('tachikoma.token', r.token);
-            }).catch(() => {});
-            return client;
-        } catch (err: unknown) {
-            // Distinguish "token rejected" (401) from "server unreachable"
-            const msg = err instanceof Error ? err.message : String(err);
-            const isAuthError = msg.includes('401') || msg.includes('Unauthorized') || msg.includes('Invalid');
-            if (isAuthError) {
-                log('Stored token rejected (401) — clearing');
-                await context.secrets.delete('tachikoma.token');
-                return null;
-            }
-            // Server unreachable — keep token, schedule retry in 30s
-            log(`Reconnect failed (server unreachable): ${msg}. Will retry in 30s.`);
-            this.scheduleReconnectRetry(context);
             return null;
         }
+
+        // Candidate hosts to try, in order. Falls back to the host from
+        // ~/.tachikoma/mcp-session.json when the stored secret host is
+        // unreachable (network moved, server moved, etc.).
+        const candidates = this.candidateHosts(secretHost);
+        log(`Reconnecting — trying hosts: ${candidates.join(', ')}`);
+
+        let lastNetworkError: string | null = null;
+        for (const host of candidates) {
+            this.updateStatusBar('connecting', host);
+            const client = new TachikomaClient(host);
+            client.setToken(token);
+            try {
+                const me = await client.me();
+                this.client = client;
+                this.userId = me.user_id;
+                this.hostUrl = host;
+                // If we used a fallback host, persist it for next reload.
+                if (host !== secretHost) {
+                    await context.secrets.store('tachikoma.host', host);
+                    log(`Updated stored host to ${host}`);
+                }
+                this.hasResolvedInitialState = true;
+                this.startTokenRefresh();
+                this.updateStatusBar();
+                this.writeMcpSession();
+                this._onDidConnect.fire(client);
+                log(`Reconnected as ${me.user_id} via ${host} (token still valid)`);
+                // Background refresh — extends session.
+                void client.refreshToken().then(async (r) => {
+                    if (r?.token) await context.secrets.store('tachikoma.token', r.token);
+                }).catch(() => {});
+                return client;
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                const isAuthError =
+                    msg.includes('401') ||
+                    msg.includes('Unauthorized') ||
+                    msg.includes('Invalid');
+                if (isAuthError) {
+                    log(`Stored token rejected by ${host} (401) — clearing`);
+                    await context.secrets.delete('tachikoma.token');
+                    this.hasResolvedInitialState = true;
+                    this.updateStatusBar();
+                    return null;
+                }
+                log(`Host ${host} unreachable: ${msg}`);
+                lastNetworkError = msg;
+                // try the next candidate
+            }
+        }
+
+        // All candidates unreachable — keep token, show "reconnecting", retry.
+        log(`All hosts unreachable (${lastNetworkError ?? 'no detail'}). Retrying in 30s.`);
+        this.hasResolvedInitialState = true;
+        this.updateStatusBar('reconnecting', candidates[0] ?? 'unknown');
+        this.scheduleReconnectRetry(context);
+        return null;
+    }
+
+    private candidateHosts(secretHost: string | undefined): string[] {
+        const out: string[] = [];
+        const seen = new Set<string>();
+        const push = (h: string | null | undefined) => {
+            if (!h) return;
+            const trimmed = h.trim();
+            if (!trimmed || seen.has(trimmed)) return;
+            seen.add(trimmed);
+            out.push(trimmed);
+        };
+        push(secretHost);
+        // Fallback 1: the host the MCP session file last knew about — that's
+        // the most recent known-good host, written either by this auth
+        // manager or by the cloud-flow connector.
+        try {
+            const file = path.join(os.homedir(), '.tachikoma', 'mcp-session.json');
+            const raw = fs.readFileSync(file, 'utf-8');
+            const data = JSON.parse(raw);
+            push(typeof data.host === 'string' ? data.host : null);
+        } catch { /* file missing or unparsable — fine */ }
+        // Fallback 2: workspace setting.
+        const cfg = vscode.workspace.getConfiguration('tachikoma');
+        push(cfg.get<string>('host') || '');
+        return out;
     }
 
     private reconnectRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -291,6 +353,19 @@ export class AuthManager implements vscode.Disposable {
         if (state === 'connecting') {
             this.statusBarItem.text = '$(loading~spin) Tachikoma: Connecting...';
             this.statusBarItem.tooltip = `Connecting to ${host}`;
+            return;
+        }
+        if (state === 'reconnecting') {
+            this.statusBarItem.text = '$(sync~spin) Tachikoma: Reconnecting…';
+            this.statusBarItem.tooltip =
+                `Server unreachable at ${host} — retrying every 30s\nSession is preserved.`;
+            this.statusBarItem.backgroundColor =
+                new vscode.ThemeColor('statusBarItem.warningBackground');
+            return;
+        }
+        // Suppress the "Disconnected" state until tryReconnect has resolved.
+        // Avoids a flash of red on every window reload.
+        if (!this.hasResolvedInitialState && !this.isConnected()) {
             return;
         }
         if (this.isConnected()) {
