@@ -16,6 +16,7 @@ import type {
 export class TachikomaClient {
     readonly baseUrl: string;
     private token: string | null = null;
+    private machineId: string | null = null;
 
     constructor(baseUrl: string) {
         this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -29,10 +30,22 @@ export class TachikomaClient {
         return this.token;
     }
 
+    /** Tag every request with the local machine identity so the server can
+     * enforce role-based policy (e.g., refuse deletes from "local" machines).
+     * Must be called after registerComputer() returns the machine_id. */
+    setMachineId(machineId: string | null): void {
+        this.machineId = machineId;
+    }
+
     private headers(): Record<string, string> {
         const h: Record<string, string> = { 'Content-Type': 'application/json' };
         if (this.token) {
             h['Authorization'] = `Bearer ${this.token}`;
+        }
+        if (this.machineId) {
+            // Server resolves machine_id → ComputerRecord.node_type
+            // and stamps origin_machine_type on emitted events.
+            h['X-Machine-Id'] = this.machineId;
         }
         return h;
     }

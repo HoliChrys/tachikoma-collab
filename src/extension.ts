@@ -164,13 +164,15 @@ export async function activate(context: vscode.ExtensionContext) {
             await cacheManager?.handleServerFileEvent(evt);
         });
 
-        // Register computer
+        // Register computer + tag client with machine_id so every request
+        // carries the X-Machine-Id header (origin policy on server side).
         try {
             await client.registerComputer({
                 machine_id: machineId, hostname: os.hostname(),
                 name: `${os.hostname()} (VS Code)`, node_type: 'local',
                 os_type: os.platform(), os_version: os.release(),
             });
+            client.setMachineId(machineId);
             log(`Computer registered: ${machineId}`);
         } catch (err) { log(`Computer register failed (non-blocking): ${err}`); }
 
