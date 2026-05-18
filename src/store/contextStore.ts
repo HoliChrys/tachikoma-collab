@@ -311,6 +311,30 @@ export class ContextStore implements vscode.Disposable {
                 void this.resync();
                 break;
 
+            case 'space.deleted':
+            case 'context.deleted': {
+                // Remove the ctx node + cascade-remove all descendants.
+                // Path may come in as space_path or context_path depending on emitter.
+                const path = (event.space_path ?? event.context_path) as string;
+                if (path) {
+                    // Collect path + all descendants for removal
+                    const toRemove: string[] = [];
+                    for (const k of this.nodes.keys()) {
+                        if (k === path || k.startsWith(path + '.')) toRemove.push(k);
+                    }
+                    for (const k of toRemove) {
+                        const node = this.nodes.get(k);
+                        if (node && node.parentPath) {
+                            const parent = this.nodes.get(node.parentPath);
+                            if (parent) parent.children = parent.children.filter((c) => c !== k);
+                        }
+                        this.nodes.delete(k);
+                    }
+                    if (toRemove.length) changed = true;
+                }
+                break;
+            }
+
             case 'user.created':
             case 'user.activated':
             case 'user.suspended':

@@ -79,6 +79,7 @@ class EventStreamIterator {
             'component.created', 'component.updated', 'component.removed',
             'component.participant_joined', 'component.participant_left',
             'space.created', 'space.updated', 'space.synced',
+            'space.deleted', 'context.deleted',
             'computer.discovered', 'computer.updated',
             'user.created', 'user.activated',
             'node.online', 'node.offline', 'node.heartbeat',
