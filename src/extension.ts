@@ -176,22 +176,23 @@ export async function activate(context: vscode.ExtensionContext) {
             log(`Computer registered: ${machineId}`);
         } catch (err) { log(`Computer register failed (non-blocking): ${err}`); }
 
-        // Health check: ping server every 30s, auto-resync on reconnect
+        // Health check: ping every 30s, tolerate 2 failures before marking stale.
+        // Avoids flapping participant_joined/left on transient network blips.
+        let failureCount = 0;
         let serverWasDown = false;
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         heartbeatInterval = setInterval(async () => {
             try {
                 await client.me();
                 client.computerHeartbeat(machineId).catch(() => {});
+                failureCount = 0;
                 if (serverWasDown) {
                     serverWasDown = false;
-                    log('Server back online — resyncing');
+                    log('Server back online — resyncing (collab kept alive)');
                     authManager.setSyncState('syncing');
                     await store.init(client, userId);
-                    // Reconnect collab manager (separate SSE connection)
-                    collabManager.disconnect();
-                    collabManager.connect(client, userId, userId);
-                    // Re-trigger collaboration for all open documents to re-broadcast participant join
+                    // Don't disconnect/reconnect collabManager — just re-broadcast
+                    // participant_joined for open docs so we re-appear in collaborators.
                     if (config.get<boolean>('autoCollab', true)) {
                         for (const doc of vscode.workspace.textDocuments) {
                             const ctx = contextFromUri(doc.uri);
@@ -203,9 +204,11 @@ export async function activate(context: vscode.ExtensionContext) {
                     authManager.setSyncState('synced');
                 }
             } catch {
-                if (!serverWasDown) {
+                failureCount++;
+                // Tolerate 2 failures (~60s) before marking stale to avoid flapping
+                if (failureCount >= 2 && !serverWasDown) {
                     serverWasDown = true;
-                    log('Server unreachable — marking stale');
+                    log(`Server unreachable after ${failureCount} pings — marking stale`);
                     authManager.setSyncState('stale');
                 }
             }
