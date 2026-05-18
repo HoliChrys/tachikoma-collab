@@ -292,6 +292,11 @@ export class AuthManager implements vscode.Disposable {
 
     async disconnect(context: vscode.ExtensionContext): Promise<void> {
         log('Disconnecting...');
+        // Cancel any pending reconnect retry — user explicitly disconnected
+        if (this.reconnectRetryTimer) {
+            clearTimeout(this.reconnectRetryTimer);
+            this.reconnectRetryTimer = null;
+        }
         if (this.client) {
             try { await this.client.logout(); } catch { /* ignore */ }
         }
@@ -300,6 +305,8 @@ export class AuthManager implements vscode.Disposable {
         this.hostUrl = null;
         this.stopTokenRefresh();
         await context.secrets.delete('tachikoma.token');
+        await context.secrets.delete('tachikoma.host');
+        await context.secrets.delete('tachikoma.username');
         this.updateStatusBar();
         this.writeMcpSession();
         this._onDidDisconnect.fire();
