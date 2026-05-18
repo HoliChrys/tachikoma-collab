@@ -106,13 +106,14 @@ export class ContextStore implements vscode.Disposable {
         log('ContextStore: resyncing from API...');
 
         try {
-            const [galaxies, systems, spaces, userList, sessionsResp, tmuxResp] = await Promise.all([
+            const [galaxies, systems, spaces, userList, sessionsResp, tmuxResp, participantsResp] = await Promise.all([
                 this.client.getGalaxies(),
                 this.client.getSystems(),
                 this.client.getSpaces(),
                 this.client.listUsers() as Promise<UserRecord[]>,
                 this.client.listSessionsByContext().catch(() => ({ groups: [], total_active: 0, total_exited: 0 })),
                 this.client.listTmuxSessions().catch(() => ({ sessions: [] })),
+                this.client.getActiveParticipants().catch(() => ({ participants: [], total: 0 })),
             ]);
 
             // Preserve active contexts + live users state across rebuild
@@ -120,6 +121,17 @@ export class ContextStore implements vscode.Disposable {
             const prevActiveUsers = new Map<string, Set<string>>();
             for (const [k, v] of this.nodes) {
                 if (v.activeUsers.size > 0) prevActiveUsers.set(k, new Set(v.activeUsers));
+            }
+
+            // Merge server snapshot of active participants into prevActiveUsers
+            // (overrides stale cache with authoritative state at T0).
+            for (const p of participantsResp.participants ?? []) {
+                if (!p.context_path) continue;
+                const set = prevActiveUsers.get(p.context_path) ?? new Set<string>();
+                for (const uid of p.user_ids ?? []) {
+                    if (uid && uid !== this.myUserId) set.add(uid);
+                }
+                if (set.size > 0) prevActiveUsers.set(p.context_path, set);
             }
 
             this.nodes.clear();

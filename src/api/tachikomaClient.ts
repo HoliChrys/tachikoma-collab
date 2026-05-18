@@ -201,6 +201,26 @@ export class TachikomaClient {
         return this.request('GET', `/api/components/${qs ? '?' + qs : ''}`);
     }
 
+    /**
+     * Snapshot of currently active participants per component.
+     * Use on (re)connect to hydrate local activeUsers BEFORE subscribing to SSE,
+     * which only delivers deltas after subscription time.
+     */
+    async getActiveParticipants(contextPath?: string): Promise<{
+        participants: Array<{
+            component_id: string;
+            component_type: string;
+            session_id: string;
+            context_path: string;
+            file_path: string;
+            user_ids: string[];
+        }>;
+        total: number;
+    }> {
+        const qs = contextPath ? `?context_path=${encodeURIComponent(contextPath)}` : '';
+        return this.request('GET', `/api/components/active-participants${qs}`);
+    }
+
     async createComponent(componentType: string, sessionId: string, title: string = '', initialData: Record<string, unknown> = {}): Promise<ComponentResponse> {
         return this.request<ComponentResponse>('POST', '/api/components/', {
             component_type: componentType,
