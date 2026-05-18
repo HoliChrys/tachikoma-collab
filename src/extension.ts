@@ -296,15 +296,21 @@ export async function activate(context: vscode.ExtensionContext) {
             if (node.kind === 'session' && node.sessionType === 'tmux') {
                 attachTmuxSession({ extensionUri: context.extensionUri, hostUrl, token, sessionId: node.sessionId, sessionName: node.name });
             } else if (node.kind === 'session' && node.sessionType === 'zellij') {
-                await attachZellijSession({ client, sessionName: node.name });
+                await attachZellijSession({
+                    client,
+                    sessionId: node.sessionId,
+                    sessionName: node.name,
+                    isProtected: node.isProtected,
+                });
             } else if (node.kind === 'zellij') {
-                await attachZellijSession({ client, sessionName: node.parentCtxId, ctxId: node.parentCtxId });
+                // "Zellij Web" entry — attach a default session named after the context
+                await attachZellijSession({ client, sessionId: node.parentCtxId, ctxId: node.parentCtxId });
             }
         }),
         vscode.commands.registerCommand('tachikoma.openZellij', async (node: ZellijEntry) => {
             const client = authManager.getClient();
             if (!client) return;
-            await attachZellijSession({ client, sessionName: node.parentCtxId, ctxId: node.parentCtxId });
+            await attachZellijSession({ client, sessionId: node.parentCtxId, ctxId: node.parentCtxId });
         }),
         vscode.commands.registerCommand('tachikoma.refreshSessions', () => sessionsProvider.refresh()),
 

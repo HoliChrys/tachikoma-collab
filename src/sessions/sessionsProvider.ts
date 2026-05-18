@@ -23,6 +23,10 @@ interface SessionEntry {
     tmuxTarget?: string;
     tmuxSocket?: string;
     zwebPort?: number;
+    isProtected?: boolean;
+    isCurrentContext?: boolean;
+    webserverActive?: boolean;
+    layout?: string;
 }
 
 interface ZellijEntry {
@@ -90,9 +94,22 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
 
         if (element.kind === 'session') {
             const item = new vscode.TreeItem(element.name, vscode.TreeItemCollapsibleState.None);
-            item.iconPath = new vscode.ThemeIcon('terminal');
-            item.description = element.sessionType;
-            item.contextValue = 'tmuxSession';
+            // Icon: lock for protected, terminal otherwise. Green if current context.
+            let iconId: string;
+            if (element.isProtected) iconId = 'lock';
+            else if (element.webserverActive) iconId = 'broadcast';
+            else iconId = 'terminal';
+            item.iconPath = element.isCurrentContext
+                ? new vscode.ThemeIcon(iconId, new vscode.ThemeColor('charts.green'))
+                : new vscode.ThemeIcon(iconId);
+
+            const tags: string[] = [element.sessionType];
+            if (element.isProtected) tags.push('🔒');
+            if (element.isCurrentContext) tags.push('current');
+            if (element.layout && element.layout !== 'default') tags.push(element.layout);
+            item.description = tags.join(' · ');
+
+            item.contextValue = element.isProtected ? 'protectedSession' : 'tmuxSession';
             item.command = {
                 command: 'tachikoma.attachSession',
                 title: 'Attach',
@@ -191,9 +208,14 @@ export class SessionsProvider implements vscode.TreeDataProvider<SessionNode> {
                 targetNode.sessions.push({
                     kind: 'session',
                     parentCtxId: targetCtxId,
-                    sessionId: s.id,
+                    // Use clean session_id (no `session-` prefix) for API calls + zellij attach
+                    sessionId: s.session_id ?? s.id,
                     name: s.name,
                     sessionType: (s.session_type as 'tmux' | 'zellij') || 'zellij',
+                    isProtected: s.zellij_protected ?? false,
+                    isCurrentContext: s.is_current_context ?? false,
+                    webserverActive: s.webserver_active ?? false,
+                    layout: s.zellij_layout,
                 });
             }
         }

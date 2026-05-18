@@ -33,23 +33,47 @@ export function attachTmuxSession(opts: {
 
 /**
  * Zellij sessions → native VS Code terminal running:
- *   zellij attach https://session.zweb.{ctx}.tachikoma.sh/{session} --token {token} --remember
+ *   zellij attach https://session.zweb.{ctx}.tachikoma.sh/{session_id} --token {token} --remember
  *
- * Opens in the terminal panel (bottom of VS Code).
- * Direct zellij client connection — no SSH, no WebView, no iframe.
+ * Uses the canonical session_id (without `session-` prefix) — not the display name.
+ * If session is zellij_protected, prompts for password and calls /unlock first.
  */
 export async function attachZellijSession(opts: {
     client: TachikomaClient;
-    sessionName: string;
+    sessionId: string;
+    sessionName?: string;
     ctxId?: string;
+    isProtected?: boolean;
 }): Promise<void> {
-    log(`Attach zellij: ${opts.sessionName}`);
+    const sessionId = opts.sessionId;
+    const displayName = opts.sessionName ?? sessionId;
+    log(`Attach zellij: ${sessionId}${opts.isProtected ? ' (protected)' : ''}`);
+
+    // Unlock if protected
+    if (opts.isProtected) {
+        const password = await vscode.window.showInputBox({
+            prompt: `Session "${displayName}" is password-protected — enter password`,
+            password: true,
+            ignoreFocusOut: true,
+        });
+        if (!password) {
+            vscode.window.showWarningMessage('Attach cancelled — no password provided');
+            return;
+        }
+        try {
+            await opts.client.unlockSession(sessionId, password);
+            log(`Session ${sessionId} unlocked`);
+        } catch (err) {
+            vscode.window.showErrorMessage(`Unlock failed: ${err}`);
+            return;
+        }
+    }
 
     let ctxId = opts.ctxId;
     let zwToken: string;
 
     if (!ctxId) {
-        const webData = await opts.client.getSessionWeb(opts.sessionName);
+        const webData = await opts.client.getSessionWeb(sessionId);
         ctxId = webData.ctx_id;
         zwToken = webData.token;
     } else {
@@ -57,13 +81,13 @@ export async function attachZellijSession(opts: {
         zwToken = webInfo.token;
     }
 
-    const serverUrl = `https://session.zweb.${ctxId}.tachikoma.sh/${opts.sessionName}`;
+    const serverUrl = `https://session.zweb.${ctxId}.tachikoma.sh/${sessionId}`;
     const cmd = `zellij attach ${serverUrl} --token ${zwToken} --remember`;
 
     log(`Zellij terminal: ${cmd}`);
 
     const term = vscode.window.createTerminal({
-        name: `zellij · ${opts.sessionName}`,
+        name: `zellij · ${displayName}`,
         iconPath: new vscode.ThemeIcon('terminal'),
     });
     term.sendText(cmd);

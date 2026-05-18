@@ -12,11 +12,21 @@ export interface TmuxSessionInfo {
 
 export interface ZellijSessionInfo {
     id: string;
+    session_id: string;
     name: string;
     session_type: string;
     context_path: string;
+    computer_id?: string;
+    owner_id?: string;
     status: string;
+    state?: string;
+    webserver_active?: boolean;
+    webserver_port?: number;
+    webserver_reach?: string;
     is_current_context?: boolean;
+    zellij_layout?: string;
+    zellij_protected?: boolean;
+    created_at?: string;
 }
 
 export interface ContextSessionGroup {

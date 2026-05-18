@@ -187,8 +187,20 @@ export class TachikomaClient {
         return this.request('GET', `/api/sessions/web-info${qs}`);
     }
 
-    async getSessionWeb(sessionName: string): Promise<{ ctx_id: string; iframe_url: string; session_url?: string; port: number; token: string }> {
-        return this.request('GET', `/api/sessions/${encodeURIComponent(sessionName)}/web`);
+    async getSessionWeb(sessionId: string): Promise<{ ctx_id: string; iframe_url: string; session_url?: string; port: number; token: string }> {
+        return this.request('GET', `/api/sessions/${encodeURIComponent(sessionId)}/web`);
+    }
+
+    async unlockSession(sessionId: string, password: string): Promise<{ ok: boolean }> {
+        return this.request('POST', `/api/sessions/${encodeURIComponent(sessionId)}/unlock`, { password });
+    }
+
+    async grantSession(sessionId: string, actorId: string): Promise<unknown> {
+        return this.request('POST', `/api/sessions/${encodeURIComponent(sessionId)}/grant`, { actor_id: actorId });
+    }
+
+    async listSessionGrants(sessionId: string): Promise<{ grants: Array<{ actor_id: string; granted_at: string }> }> {
+        return this.request('GET', `/api/sessions/${encodeURIComponent(sessionId)}/grants`);
     }
 
     // --- Components ---
