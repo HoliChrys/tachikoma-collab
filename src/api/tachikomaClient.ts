@@ -286,4 +286,64 @@ export class TachikomaClient {
     async computerHeartbeat(machineId: string): Promise<unknown> {
         return this.request('POST', `/api/network/computers/${machineId}/heartbeat`);
     }
+
+    // ── MCP profiles + active profile (E5+) ────────────────────────────
+
+    /** List MCPProfileRecord visible to *userId* (granted directly or
+     * via group membership). */
+    async listMcpProfiles(userId: string): Promise<{ profiles: MCPProfile[]; total: number }> {
+        const q = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+        return this.request<{ profiles: MCPProfile[]; total: number }>(
+            'GET', `/api/mcp/profiles/${q}`,
+        );
+    }
+
+    /** Read the user's currently active MCP profile (or null). */
+    async getActiveProfile(userId: string): Promise<ActiveProfileResponse> {
+        return this.request<ActiveProfileResponse>(
+            'GET', `/api/users/${encodeURIComponent(userId)}/active-profile`,
+        );
+    }
+
+    /** Set / clear the user's active MCP profile. Empty string clears.
+     * The backend emits UserActiveProfileChanged on the EventBus and a
+     * matching SSE notification reaches the connected extension. */
+    async setActiveProfile(
+        userId: string, profileId: string,
+    ): Promise<{ user_id: string; active_profile_id: string; previous_profile_id: string }> {
+        return this.request(
+            'PATCH', `/api/users/${encodeURIComponent(userId)}/active-profile`,
+            { profile_id: profileId },
+        );
+    }
+}
+
+// ── MCP profile types (kept in this file to avoid a new types module) ────
+
+export interface MCPCapability {
+    kind: 'tool' | 'ui' | 'resource' | 'prompt';
+    id: string;
+    name: string;
+    description?: string;
+}
+
+export interface MCPProfile {
+    id: string;
+    profile_name: string;
+    display_name: string;
+    icon: string;
+    user_id: string;
+    created_by: string;
+    description: string;
+    context_path: string;
+    labels: Record<string, string>;
+    state: 'active' | 'suspended' | 'archived';
+    tool_names: string[];
+    capabilities: MCPCapability[];
+}
+
+export interface ActiveProfileResponse {
+    user_id: string;
+    active_profile_id: string;
+    profile: MCPProfile | null;
 }

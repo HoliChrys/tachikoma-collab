@@ -10,6 +10,11 @@ import { SessionsProvider, type SessionEntry, type ZellijEntry } from './session
 import { attachZellijSession, attachTmuxSession } from './sessions/sessionAttacher';
 import { log, getOutputChannel } from './log';
 import { openLocalTerminalPanel } from './terminal/terminalPanel';
+import { McpProfileStore } from './store/mcpProfileStore';
+import { McpProfileSseBridge } from './store/mcpProfileSseBridge';
+import { McpCopilotTreeProvider } from './copilot/treeProvider';
+import { registerMcpStatusBar } from './copilot/statusbar';
+import { CopilotWebviewProvider } from './copilot/webview';
 import type { ContextNode } from './types';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -38,6 +43,16 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('tachikomaCollaborators', collaboratorsProvider),
         vscode.window.registerTreeDataProvider('tachikomaSessions', sessionsProvider),
     );
+
+    // ── MCP Copilot wiring (E5+) ──────────────────────────────────────
+    // Store + SSE bridge are created up-front but only start after
+    // `tachikoma.connect`. The 3 surfaces (statusbar, tree, webview)
+    // register here so they're visible immediately and react to the
+    // store's `onDidChange` events.
+    let mcpProfileStore: McpProfileStore | null = null;
+    let mcpProfileSseBridge: McpProfileSseBridge | null = null;
+    let mcpCopilotTree: McpCopilotTreeProvider | null = null;
+    let copilotWebviewProvider: CopilotWebviewProvider | null = null;
 
     function contextFromUri(uri: vscode.Uri): string | undefined {
         if (uri.scheme === 'file' && cacheManager) {
@@ -155,6 +170,32 @@ export async function activate(context: vscode.ExtensionContext) {
         sessionsProvider.setClient(client);
         collabManager.connect(client, userId, userId);
 
+        // MCP Copilot — first connect creates the store + UI surfaces,
+        // subsequent reconnects just refresh state in place.
+        if (!mcpProfileStore) {
+            mcpProfileStore = new McpProfileStore(client);
+            mcpProfileSseBridge = new McpProfileSseBridge(client, mcpProfileStore);
+            mcpCopilotTree = new McpCopilotTreeProvider(mcpProfileStore);
+            copilotWebviewProvider = new CopilotWebviewProvider(
+                context, client, mcpProfileStore,
+            );
+            context.subscriptions.push(
+                vscode.window.registerTreeDataProvider(
+                    'tachikomaMcpCopilot', mcpCopilotTree,
+                ),
+                vscode.window.registerWebviewViewProvider(
+                    CopilotWebviewProvider.viewType, copilotWebviewProvider,
+                ),
+            );
+            registerMcpStatusBar(context, mcpProfileStore);
+        }
+        try {
+            await mcpProfileStore.refresh(userId);
+            mcpProfileSseBridge?.start();
+        } catch (err) {
+            log(`MCP profile init failed (non-blocking): ${err}`);
+        }
+
         // Create cache manager — local mirror of the server monorepo
         cacheManager = new CacheManager(hostUrl, userId);
         cacheManager.connect(client);
@@ -230,12 +271,72 @@ export async function activate(context: vscode.ExtensionContext) {
         contextTree.setClient(null);
         sessionsProvider.setClient(null);
         collabManager.disconnect();
+        mcpProfileSseBridge?.stop();
     });
 
     context.subscriptions.push(
         vscode.commands.registerCommand('tachikoma.connect', () => authManager.connect(context)),
         vscode.commands.registerCommand('tachikoma.disconnect', () => authManager.disconnect(context)),
         vscode.commands.registerCommand('tachikoma.showOutput', () => getOutputChannel().show(true)),
+
+        // ── MCP Copilot commands (E5+) ────────────────────────────
+        vscode.commands.registerCommand('tachikoma.copilot.open', () => {
+            vscode.commands.executeCommand(
+                'workbench.view.extension.tachikomaExplorer',
+            );
+            vscode.commands.executeCommand('tachikomaCopilot.focus');
+        }),
+        vscode.commands.registerCommand('tachikoma.mcp.selectProfile', async () => {
+            if (!mcpProfileStore) {
+                vscode.window.showWarningMessage('Connect to tachikoma first');
+                return;
+            }
+            const profiles = mcpProfileStore.getProfiles();
+            const active = mcpProfileStore.getActiveProfileId();
+            const items: vscode.QuickPickItem[] = [
+                {
+                    label: '$(circle-outline) (union — all granted)',
+                    description: active ? '' : 'current',
+                    detail: 'Use every capability the user holds across all granted profiles',
+                },
+                ...profiles.map(p => ({
+                    label: `${p.icon || '$(symbol-method)'} ${p.display_name || p.profile_name}`,
+                    description: p.id === active ? 'current' : '',
+                    detail: `${p.capabilities?.length ?? 0} capabilities — ${p.description || p.profile_name}`,
+                })),
+            ];
+            const pick = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select an MCP profile (current applies until you switch)',
+            });
+            if (!pick) return;
+            const idx = items.indexOf(pick);
+            const target = idx === 0 ? '' : profiles[idx - 1].id;
+            try {
+                await mcpProfileStore.setActive(target);
+                vscode.window.showInformationMessage(
+                    target
+                        ? `MCP profile: ${profiles[idx - 1].display_name || profiles[idx - 1].profile_name}`
+                        : 'MCP profile: union (cleared)',
+                );
+            } catch (err) {
+                vscode.window.showErrorMessage(`Switch failed: ${err}`);
+            }
+        }),
+        vscode.commands.registerCommand('tachikoma.mcp.clearActiveProfile', async () => {
+            if (!mcpProfileStore) return;
+            try {
+                await mcpProfileStore.setActive('');
+                vscode.window.showInformationMessage('MCP profile cleared (union mode)');
+            } catch (err) {
+                vscode.window.showErrorMessage(`Clear failed: ${err}`);
+            }
+        }),
+        vscode.commands.registerCommand('tachikoma.mcp.refresh', async () => {
+            if (!mcpProfileStore) return;
+            const uid = authManager.getUserId();
+            if (!uid) return;
+            await mcpProfileStore.refresh(uid);
+        }),
         vscode.commands.registerCommand('tachikoma.getMcpSession', () => {
             const session = authManager.getMcpSession();
             if (!session) return null;

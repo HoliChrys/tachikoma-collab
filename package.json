@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "4.10.0",
+  "version": "4.11.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -113,6 +113,27 @@
         "command": "tachikoma.remoteTerminal",
         "title": "Open Remote Terminal",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "tachikoma.copilot.open",
+        "title": "Tachikoma: Open Copilot",
+        "category": "Tachikoma"
+      },
+      {
+        "command": "tachikoma.mcp.selectProfile",
+        "title": "Tachikoma: Select MCP Profile",
+        "category": "Tachikoma"
+      },
+      {
+        "command": "tachikoma.mcp.clearActiveProfile",
+        "title": "Tachikoma: Clear Active MCP Profile",
+        "category": "Tachikoma"
+      },
+      {
+        "command": "tachikoma.mcp.refresh",
+        "title": "Tachikoma: Refresh MCP",
+        "category": "Tachikoma",
+        "icon": "$(refresh)"
       }
     ],
     "keybindings": [
@@ -149,6 +170,11 @@
           "command": "tachikoma.disconnect",
           "when": "view == tachikomaContextTree",
           "group": "navigation@99"
+        },
+        {
+          "command": "tachikoma.mcp.refresh",
+          "when": "view == tachikomaMcpCopilot",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -201,6 +227,17 @@
         {
           "id": "tachikomaSessions",
           "name": "Sessions"
+        },
+        {
+          "id": "tachikomaMcpCopilot",
+          "name": "MCP Copilot",
+          "when": "tachikoma.connected"
+        },
+        {
+          "id": "tachikomaCopilot",
+          "name": "Copilot",
+          "type": "webview",
+          "when": "tachikoma.connected"
         }
       ]
     },
@@ -240,6 +277,11 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically start live collaboration (CRDT + presence) when opening remote files"
+        },
+        "tachikoma.copilot.url": {
+          "type": "string",
+          "default": "",
+          "description": "Optional dashboard URL where the CopilotKit chat lives. When set, the Copilot view embeds it as an iframe. Empty = use the local-only profile picker UI."
         }
       }
     }
