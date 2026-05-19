@@ -605,6 +605,10 @@ export class ContextStore implements vscode.Disposable {
         await this.resync();
     }
 
+    getMyUserId(): string {
+        return this.myUserId;
+    }
+
     getActiveCollaborators(): UserRecord[] {
         if (this.activeContexts.size === 0) {
             return [...this.users.values()];

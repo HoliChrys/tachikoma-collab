@@ -4,7 +4,7 @@ import type { UserRecord } from '../types';
 
 type CollabNode =
     | { kind: 'header'; label: string; description?: string; children: CollabNode[] }
-    | { kind: 'user'; user: UserRecord; isLive: boolean }
+    | { kind: 'user'; user: UserRecord; isLive: boolean; isSelf?: boolean }
     | { kind: 'empty'; label: string };
 
 export class CollaboratorsProvider implements vscode.TreeDataProvider<CollabNode> {
@@ -35,10 +35,13 @@ export class CollaboratorsProvider implements vscode.TreeDataProvider<CollabNode
         }
 
         const u = element.user;
-        const displayName = u.name || u.user_id;
+        const displayName = element.isSelf ? `${u.name || u.user_id} (you)` : (u.name || u.user_id);
         const item = new vscode.TreeItem(displayName, vscode.TreeItemCollapsibleState.None);
 
-        if (element.isLive) {
+        if (element.isSelf) {
+            item.iconPath = new vscode.ThemeIcon('person-filled', new vscode.ThemeColor('charts.green'));
+            item.description = 'connected';
+        } else if (element.isLive) {
             item.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.green'));
             item.description = 'active';
         } else if (u.state === 'active') {
@@ -59,39 +62,47 @@ export class CollaboratorsProvider implements vscode.TreeDataProvider<CollabNode
         if (element?.kind === 'header') return element.children;
         if (element) return [];
 
+        const myUserId = this.store.getMyUserId();
         const activeUsers = this.store.getActiveCollaborators();
         const grantedUsers = this.store.getGrantedUsers();
         const activePaths = this.store.getActiveContextPaths();
 
         const sections: CollabNode[] = [];
 
-        if (activeUsers.length > 0) {
+        // Always-on "You" section — the current user is implicitly connected as long
+        // as the extension is authed. Built from the cached UserRecord if present,
+        // otherwise from a minimal placeholder.
+        if (myUserId) {
+            const meRecord = activeUsers.find((u) => u.user_id === myUserId)
+                ?? grantedUsers.find((u) => u.user_id === myUserId)
+                ?? { user_id: myUserId, name: myUserId, state: 'active', user_type: 'user', contexts: [] } as UserRecord;
             sections.push({
                 kind: 'header',
-                label: `Live (${activeUsers.length})`,
-                children: activeUsers.map((u) => ({ kind: 'user', user: u, isLive: true })),
+                label: 'You',
+                children: [{ kind: 'user', user: meRecord, isLive: true, isSelf: true }],
             });
         }
 
-        if (grantedUsers.length > 0) {
-            const activeIds = new Set(activeUsers.map((u) => u.user_id));
-            const grantedOnly = grantedUsers.filter((u) => !activeIds.has(u.user_id));
-            if (grantedOnly.length > 0) {
-                sections.push({
-                    kind: 'header',
-                    label: `Granted (${grantedOnly.length})`,
-                    description: activePaths.length > 0 ? activePaths.join(', ') : undefined,
-                    children: grantedOnly.map((u) => ({ kind: 'user', user: u, isLive: false })),
-                });
-            }
+        // Other live users (exclude self — store already excludes us from activeUsers, but be defensive)
+        const otherActive = activeUsers.filter((u) => u.user_id !== myUserId);
+        if (otherActive.length > 0) {
+            sections.push({
+                kind: 'header',
+                label: `Live (${otherActive.length})`,
+                children: otherActive.map((u) => ({ kind: 'user', user: u, isLive: true })),
+            });
         }
 
-        if (sections.length === 0 && activePaths.length > 0) {
-            return [{ kind: 'empty', label: 'No collaborators in active contexts' }];
-        }
-
-        if (sections.length === 0) {
-            return [{ kind: 'empty', label: 'Open a file to see collaborators' }];
+        // Granted but not live (exclude self + already-live)
+        const liveIds = new Set([myUserId, ...otherActive.map((u) => u.user_id)]);
+        const grantedOnly = grantedUsers.filter((u) => !liveIds.has(u.user_id));
+        if (grantedOnly.length > 0) {
+            sections.push({
+                kind: 'header',
+                label: `Granted (${grantedOnly.length})`,
+                description: activePaths.length > 0 ? activePaths.join(', ') : undefined,
+                children: grantedOnly.map((u) => ({ kind: 'user', user: u, isLive: false })),
+            });
         }
 
         return sections;
