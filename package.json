@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "4.11.0",
+  "version": "5.0.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -282,6 +282,26 @@
           "type": "string",
           "default": "",
           "description": "Optional dashboard URL where the CopilotKit chat lives. When set, the Copilot view embeds it as an iframe. Empty = use the local-only profile picker UI."
+        },
+        "tachikoma.terminals.persist": {
+          "type": "boolean",
+          "default": true,
+          "description": "Track terminal sessions opened by the extension and persist them per-user via the backend for cross-machine replay."
+        },
+        "tachikoma.terminals.autoReplayOnConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically restore previously-tracked terminals when reconnecting."
+        },
+        "tachikoma.terminals.crossMachineReplay": {
+          "type": "boolean",
+          "default": false,
+          "description": "Replay terminals opened on other machines (same user) automatically. Default: false (opt-in)."
+        },
+        "tachikoma.terminals.killOnDisconnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Close tracked terminals when disconnecting from Tachikoma."
         }
       }
     }

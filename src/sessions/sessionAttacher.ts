@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { TachikomaClient } from '../api/tachikomaClient';
+import type { TerminalTracker } from '../terminals/terminalTracker';
 import { log } from '../log';
 import { openTerminalPanel } from '../terminal/terminalPanel';
 
@@ -44,6 +45,9 @@ export async function attachZellijSession(opts: {
     sessionName?: string;
     ctxId?: string;
     isProtected?: boolean;
+    tracker?: TerminalTracker;
+    userId?: string;
+    machineId?: string;
 }): Promise<void> {
     const sessionId = opts.sessionId;
     const displayName = opts.sessionName ?? sessionId;
@@ -92,4 +96,18 @@ export async function attachZellijSession(opts: {
     });
     term.sendText(cmd);
     term.show();
+
+    // Register for persistence (token NOT stored — refetched at replay time)
+    if (opts.tracker && opts.userId && opts.machineId) {
+        opts.tracker.register(term, {
+            kind: 'zellij',
+            machine_id: opts.machineId,
+            user_id: opts.userId,
+            context_path: ctxId,
+            title: `zellij · ${displayName}`,
+            zellij_session_id: sessionId,
+            zellij_server_url: `https://session.zweb.${ctxId}.tachikoma.sh`,
+            auto_replay: true,
+        });
+    }
 }

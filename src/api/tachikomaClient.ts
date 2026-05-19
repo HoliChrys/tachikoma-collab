@@ -12,6 +12,7 @@ import type {
     ContextSessionGroup,
     ZellijWebInfo,
 } from '../sessions/sessionTypes';
+import type { TrackedTerminal } from '../terminals/terminalTypes';
 
 export class TachikomaClient {
     readonly baseUrl: string;
@@ -201,6 +202,31 @@ export class TachikomaClient {
 
     async listSessionGrants(sessionId: string): Promise<{ grants: Array<{ actor_id: string; granted_at: string }> }> {
         return this.request('GET', `/api/sessions/${encodeURIComponent(sessionId)}/grants`);
+    }
+
+    // --- Terminal sessions (per-user persistence) ---
+
+    async getTerminalsState(): Promise<TrackedTerminal[]> {
+        try {
+            const resp = await this.request<TrackedTerminal[] | { sessions: TrackedTerminal[] }>('GET', '/api/terminals/state');
+            // Tolerate both shapes (array or {sessions:[]})
+            return Array.isArray(resp) ? resp : (resp.sessions ?? []);
+        } catch {
+            // Backend may not have the endpoint yet — return empty, extension keeps working local-only
+            return [];
+        }
+    }
+
+    async putTerminalsState(terminals: TrackedTerminal[]): Promise<void> {
+        await this.request('PUT', '/api/terminals/state', { sessions: terminals });
+    }
+
+    async patchTerminal(terminal: TrackedTerminal): Promise<void> {
+        await this.request('PATCH', '/api/terminals/state', terminal);
+    }
+
+    async deleteTerminal(terminalId: string): Promise<void> {
+        await this.request('DELETE', `/api/terminals/state/${encodeURIComponent(terminalId)}`);
     }
 
     // --- Components ---

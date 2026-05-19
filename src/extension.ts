@@ -8,6 +8,9 @@ import { CollaborationManager } from './collaborative/collaborationManager';
 import { CollaboratorsProvider } from './collaborative/collaboratorsProvider';
 import { SessionsProvider, type SessionEntry, type ZellijEntry } from './sessions/sessionsProvider';
 import { attachZellijSession, attachTmuxSession } from './sessions/sessionAttacher';
+import { TerminalTracker } from './terminals/terminalTracker';
+import { TerminalStateSync } from './terminals/terminalStateSync';
+import { replayTerminals } from './terminals/terminalReplay';
 import { log, getOutputChannel } from './log';
 import { openLocalTerminalPanel } from './terminal/terminalPanel';
 import { McpProfileStore } from './store/mcpProfileStore';
@@ -28,6 +31,11 @@ export async function activate(context: vscode.ExtensionContext) {
     const sessionsProvider = new SessionsProvider();
 
     let cacheManager: CacheManager | null = null;
+
+    // Terminal persistence — tracks vscode.Terminals opened by the extension
+    const terminalTracker = new TerminalTracker();
+    let terminalSync: TerminalStateSync | null = null;
+    context.subscriptions.push(terminalTracker);
 
     contextTree.setStore(store);
     collaboratorsProvider.setStore(store);
@@ -261,12 +269,44 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Start watching local cache for changes → push to server
         cacheManager.startWatching();
+
+        // Terminal persistence: sync + replay if config enabled
+        if (config.get<boolean>('terminals.persist', true)) {
+            // Sync local tracker state with backend (REST + SSE)
+            const fileEventBus = new (await import('./collaborative/sseClient')).EventBus({
+                token: client.getToken() ?? '', baseUrl: client.baseUrl,
+            });
+            terminalSync = new TerminalStateSync(terminalTracker, machineId);
+            terminalSync.start(client, fileEventBus);
+
+            // Replay previously-tracked terminals
+            if (config.get<boolean>('terminals.autoReplayOnConnect', true)) {
+                try {
+                    const remote = await client.getTerminalsState();
+                    if (remote.length > 0) {
+                        const result = await replayTerminals(remote, terminalTracker, client, {
+                            machineId,
+                            crossMachine: config.get<boolean>('terminals.crossMachineReplay', false),
+                        });
+                        log(`Terminal replay: ${result.replayed} restored, ${result.skipped} skipped, ${result.failed} failed`);
+                    }
+                } catch (err) {
+                    log(`Terminal replay skipped: ${err}`);
+                }
+            }
+        }
     });
 
     authManager.onDidDisconnect(() => {
         log('Auth disconnected — cleaning up');
         if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
         if (localDaemonTerminal) { localDaemonTerminal.dispose(); localDaemonTerminal = null; }
+        // Stop terminal sync, optionally kill tracked terminals
+        terminalSync?.stop();
+        terminalSync = null;
+        if (config.get<boolean>('terminals.killOnDisconnect', true)) {
+            terminalTracker.killAll();
+        }
         cacheManager?.disconnect();
         contextTree.setClient(null);
         sessionsProvider.setClient(null);
@@ -402,6 +442,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     sessionId: node.sessionId,
                     sessionName: node.name,
                     isProtected: node.isProtected,
+                    tracker: terminalTracker,
+                    userId: authManager.getUserId() ?? 'unknown',
+                    machineId,
                 });
             } else if (node.kind === 'zellij') {
                 // "Zellij Web" entry — attach a default session named after the context
@@ -447,6 +490,19 @@ export async function activate(context: vscode.ExtensionContext) {
                 shellArgs: ['-t', `${userId}@${host}`, `cd ${ctxDir} && exec $SHELL -l`],
             });
             term.show();
+            terminalTracker.register(term, {
+                kind: 'ssh-remote',
+                machine_id: machineId,
+                user_id: userId,
+                context_path: ctxPath || 'global',
+                title: ctxPath ? `ssh · ${ctxPath}` : 'ssh · tachikoma',
+                shell_path: 'ssh',
+                shell_args: ['-t', `${userId}@${host}`, `cd ${ctxDir} && exec $SHELL -l`],
+                ssh_host: host,
+                ssh_user: userId,
+                ssh_cwd: ctxDir,
+                auto_replay: true,
+            });
         }),
 
         // New file → create via API, sync to cache, open local
