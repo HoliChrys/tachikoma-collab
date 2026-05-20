@@ -1,12 +1,11 @@
 /**
- * Node.js-compatible EventBus — adapted from the tachikoma SDK event-bus.ts.
+ * Node.js-compatible EventBus -- adapted from the tachikoma SDK event-bus.ts.
  *
  * Uses the `eventsource` npm package as polyfill since Node.js doesn't have
  * native EventSource. Otherwise identical to the browser SDK.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const EventSourceImpl = require('eventsource');
+import { EventSource } from 'eventsource';
 
 export interface MonorepoEvent {
     event_type: string;
@@ -37,7 +36,7 @@ export interface SubscribeOptions {
 }
 
 class EventStreamIterator {
-    private eventSource: InstanceType<typeof EventSourceImpl> | null = null;
+    private eventSource: EventSource | null = null;
     private queue: MonorepoEvent[] = [];
     private resolve: ((value: IteratorResult<MonorepoEvent>) => void) | null = null;
     private closed = false;
@@ -55,7 +54,7 @@ class EventStreamIterator {
     start(): void {
         if (this.eventSource) return;
 
-        this.eventSource = new EventSourceImpl(this.url);
+        this.eventSource = new EventSource(this.url);
 
         this.eventSource.onopen = () => {
             this._connected = true;
