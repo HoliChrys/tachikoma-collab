@@ -2,25 +2,39 @@
   "name": "tachikoma-collab",
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
-  "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "5.8.1",
+  "description": "Connect to a Tachikoma computer: browse monorepo contexts, edit remote files, attach zellij/tmux terminals, and live-collaborate via CRDT.",
+  "version": "5.9.0",
   "license": "MIT",
+  "icon": "media/icon-128.png",
+  "homepage": "https://github.com/HoliChrys/tachikoma-collab#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/HoliChrys/tachikoma-collab"
   },
+  "bugs": {
+    "url": "https://github.com/HoliChrys/tachikoma-collab/issues"
+  },
+  "qna": "marketplace",
+  "pricing": "Free",
+  "galleryBanner": {
+    "color": "#1E1E2E",
+    "theme": "dark"
+  },
   "keywords": [
+    "tachikoma",
     "collaboration",
-    "live-editing",
     "crdt",
-    "real-time",
-    "tachikoma"
+    "remote",
+    "ai"
   ],
   "engines": {
     "vscode": "^1.95.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "AI",
+    "Programming Languages",
+    "Notebooks"
   ],
   "activationEvents": [
     "onStartupFinished"

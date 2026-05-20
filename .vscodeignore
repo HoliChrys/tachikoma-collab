@@ -1,16 +1,40 @@
-.git
-.gitignore
+# --- Source & build inputs (we ship dist/ only) ---
 src/
+**/*.ts
+**/*.map
+tsconfig.json
+
+# --- node_modules: exclude wholesale, then allowlist the runtime assets
+# that dist/extension.js loads from disk (xterm.js + addon-fit). ---
 node_modules/**
 !node_modules/@xterm/xterm/css/xterm.css
 !node_modules/@xterm/xterm/lib/xterm.js
 !node_modules/@xterm/addon-fit/lib/addon-fit.js
+
+# --- Tooling / editor / VCS noise ---
+.git
+.gitignore
+.vscode/
+.vscode-test/
 out/
-*.ts
-tsconfig.json
-**/*.map
+*.vsix
+.eslintrc*
+eslint.config.*
+.prettierrc*
+
+# --- Per-repo agent / index metadata (not for marketplace) ---
 .claude/
 .gitnexus/
 CLAUDE.md
 AGENTS.md
+
+# --- Lockfile (vsce already excludes by default, but be explicit) ---
 package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# --- Tests (none ship today, future-proofing) ---
+tests/
+__tests__/
+*.test.js
+*.spec.js

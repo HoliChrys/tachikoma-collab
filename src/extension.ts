@@ -22,6 +22,7 @@ import { registerAgentCommands } from './agents/swarmCommands';
 import { registerComposer } from './composer';
 import { initFloatingPanes } from './floating';
 import { registerInlineCompletions } from './inline';
+import { NativeMcpSettingsProvider } from './copilot/nativeMcpSettings';
 import { McpProfileStore } from './store/mcpProfileStore';
 import { McpProfileSseBridge } from './store/mcpProfileSseBridge';
 import { McpCopilotTreeProvider } from './copilot/treeProvider';
@@ -206,6 +207,15 @@ export async function activate(context: vscode.ExtensionContext) {
                     CopilotWebviewProvider.viewType, copilotWebviewProvider,
                 ),
             );
+            // VI-1e : native MCP settings webview (alternative to iframe fallback)
+            try {
+                const nativeMcpProvider = new NativeMcpSettingsProvider(context, client, mcpProfileStore);
+                context.subscriptions.push(
+                    vscode.window.registerWebviewViewProvider('tachikomaMcpSettings', nativeMcpProvider),
+                );
+            } catch (err) {
+                log(`Native MCP settings registration failed: ${(err as Error).message}`);
+            }
             registerMcpStatusBar(context, mcpProfileStore);
         }
         try {
