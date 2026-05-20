@@ -379,6 +379,19 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('tachikoma.connect', () => authManager.connect(context)),
         vscode.commands.registerCommand('tachikoma.connectWithToken', async () => {
+            // Offer the choice up-front so users aren't forced into the token flow.
+            const choice = await vscode.window.showQuickPick(
+                [
+                    { label: '$(account) Username + Password', description: 'Sign in to the Tachikoma monorepo with your account credentials', value: 'userpass' as const },
+                    { label: '$(key) Paste API Token', description: 'Use a pre-generated Tachikoma API token (from CLI or dashboard)', value: 'token' as const },
+                ],
+                { placeHolder: 'How do you want to connect to Tachikoma?', ignoreFocusOut: true },
+            );
+            if (!choice) return;
+            if (choice.value === 'userpass') {
+                await authManager.connect(context);
+                return;
+            }
             const host = await vscode.window.showInputBox({
                 prompt: 'Tachikoma monorepo endpoint',
                 placeHolder: 'http://dev-005:8000 or https://tachikoma.sh',
