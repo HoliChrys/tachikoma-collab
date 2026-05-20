@@ -23,6 +23,8 @@ import { registerComposer } from './composer';
 import { initFloatingPanes } from './floating';
 import { registerInlineCompletions } from './inline';
 import { NativeMcpSettingsProvider } from './copilot/nativeMcpSettings';
+import { registerTachikomaWelcome } from './welcome';
+import { TachikomaStatusBar } from './auth/statusBarItems';
 import { McpProfileStore } from './store/mcpProfileStore';
 import { McpProfileSseBridge } from './store/mcpProfileSseBridge';
 import { McpCopilotTreeProvider } from './copilot/treeProvider';
@@ -34,6 +36,8 @@ export async function activate(context: vscode.ExtensionContext) {
     log('Tachikoma extension activating...');
 
     const authManager = new AuthManager();
+    const tachikomaStatusBar = new TachikomaStatusBar(authManager);
+    context.subscriptions.push(tachikomaStatusBar);
     const connectionStatusItem = new ConnectionStatusItem(authManager);
     context.subscriptions.push(connectionStatusItem);
     const store = new ContextStore(context.globalState);

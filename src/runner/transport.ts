@@ -16,6 +16,7 @@
 // Pattern: .agents/context/consume/transport-rpc-pattern.md.
 // ASCII only, 4-space indent.
 
+import * as vscode from 'vscode';
 import { log, logError } from '../log';
 import {
     type RpcRequest,
@@ -28,6 +29,25 @@ import type {
     TransportConfig,
     TransportEvent,
 } from './vendor/transport';
+
+/** Lifecycle / health state surfaced by RunnerTransport to outside
+ * observers (status bar, audit views). Lives outside the class so other
+ * modules can import the literal type without depending on RunnerTransport. */
+export type RunnerState = 'idle' | 'connecting' | 'active' | 'error';
+
+export interface RunnerStateSnapshot {
+    state: RunnerState;
+    /** Transport mode reported by the SDK once connected. */
+    mode: 'webtransport' | 'sse' | null;
+    /** Computer id this transport is bound to. */
+    computerId: string | null;
+    /** Last RPC method handled (any status) — null until first call. */
+    lastMethod: string | null;
+    /** Timestamp (epoch ms) of the last RPC call. */
+    lastAt: number | null;
+    /** Last error message, if state === 'error'. */
+    lastError: string | null;
+}
 
 // Loaded at runtime so a corrupt/missing vendor bundle does not break compile
 // or extension activation. esbuild rewrites this require() into the vendored
@@ -58,31 +78,71 @@ export class RunnerTransport {
     private repliesPath: string;
     private connected = false;
 
+    private snapshot: RunnerStateSnapshot;
+    private readonly _onDidChangeState =
+        new vscode.EventEmitter<RunnerStateSnapshot>();
+    /** Fires whenever the lifecycle/health state changes (idle ->
+     * connecting -> active -> error). Subscribers get the full snapshot. */
+    readonly onDidChangeState = this._onDidChangeState.event;
+
     constructor(private opts: RunnerTransportOptions) {
         this.commandsChannel = `runner.${opts.computerId}.commands`;
         this.repliesPath = '/api/runner/reply';
+        this.snapshot = {
+            state: 'idle',
+            mode: null,
+            computerId: opts.computerId,
+            lastMethod: null,
+            lastAt: null,
+            lastError: null,
+        };
+    }
+
+    getState(): RunnerStateSnapshot {
+        return { ...this.snapshot };
+    }
+
+    private setState(patch: Partial<RunnerStateSnapshot>): void {
+        this.snapshot = { ...this.snapshot, ...patch };
+        this._onDidChangeState.fire({ ...this.snapshot });
     }
 
     async connect(): Promise<void> {
         const createTransport = loadCreateTransport();
         if (!createTransport) {
             log('runner: skipping transport connect (SDK missing)');
+            this.setState({
+                state: 'error',
+                lastError: 'transport SDK missing',
+            });
             return;
         }
         log(`runner: connecting transport baseUrl=${this.opts.baseUrl}`);
-        this.client = await createTransport({
-            baseUrl: this.opts.baseUrl,
-            token: this.opts.token,
-            autoReconnect: true,
-            reconnectDelay: 3000,
-        });
-        await this.client.subscribe({ channels: [this.commandsChannel] });
-        this.client.onEvent((event) => this.onEvent(event));
-        this.connected = true;
-        log(
-            `runner: subscribed channel=${this.commandsChannel} ` +
-            `mode=${this.client.transport}`,
-        );
+        this.setState({ state: 'connecting', lastError: null });
+        try {
+            this.client = await createTransport({
+                baseUrl: this.opts.baseUrl,
+                token: this.opts.token,
+                autoReconnect: true,
+                reconnectDelay: 3000,
+            });
+            await this.client.subscribe({ channels: [this.commandsChannel] });
+            this.client.onEvent((event) => this.onEvent(event));
+            this.connected = true;
+            this.setState({
+                state: 'active',
+                mode: this.client.transport,
+                lastError: null,
+            });
+            log(
+                `runner: subscribed channel=${this.commandsChannel} ` +
+                `mode=${this.client.transport}`,
+            );
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            this.setState({ state: 'error', lastError: msg });
+            throw e;
+        }
     }
 
     disconnect(): void {
@@ -93,6 +153,7 @@ export class RunnerTransport {
         }
         this.client = null;
         this.connected = false;
+        this.setState({ state: 'idle', mode: null });
     }
 
     isConnected(): boolean {
@@ -105,6 +166,7 @@ export class RunnerTransport {
         if (event.channel !== this.commandsChannel) return;
         const req = event.data as unknown as RpcRequest;
         if (!req || req.type !== 'request') return;
+        this.setState({ lastMethod: req.method, lastAt: Date.now() });
         void this.opts.dispatcher
             .handle(req)
             .then((resp) => this.sendReply(resp))
