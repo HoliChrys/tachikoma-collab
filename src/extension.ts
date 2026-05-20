@@ -16,6 +16,8 @@ import { openLocalTerminalPanel } from './terminal/terminalPanel';
 import { registerZellijProfileProvider } from './terminal/zellijProfile';
 import { registerTachikomaChatParticipant } from './chat/chatParticipant';
 import { initRunner } from './runner';
+import { AgentsTreeProvider } from './agents/agentsView';
+import { registerAgentCommands } from './agents/swarmCommands';
 import { McpProfileStore } from './store/mcpProfileStore';
 import { McpProfileSseBridge } from './store/mcpProfileSseBridge';
 import { McpCopilotTreeProvider } from './copilot/treeProvider';

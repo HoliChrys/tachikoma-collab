@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "5.3.0",
+  "version": "5.4.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -139,6 +139,26 @@
         "command": "tachikoma.connectWithToken",
         "title": "Connect with API Token",
         "category": "Tachikoma"
+      },
+      {
+        "command": "tachikoma.agents.spawn",
+        "title": "Spawn Local Agent",
+        "category": "Tachikoma"
+      },
+      {
+        "command": "tachikoma.agents.stop",
+        "title": "Stop Agent",
+        "category": "Tachikoma"
+      },
+      {
+        "command": "tachikoma.swarm.create",
+        "title": "Create Swarm",
+        "category": "Tachikoma"
+      },
+      {
+        "command": "tachikoma.swarm.addMember",
+        "title": "Add Agent to Swarm",
+        "category": "Tachikoma"
       }
     ],
     "keybindings": [
@@ -243,6 +263,11 @@
           "name": "Copilot",
           "type": "webview",
           "when": "tachikoma.connected"
+        },
+        {
+          "id": "tachikomaAgents",
+          "name": "Tachikoma Agents",
+          "when": "tachikoma:connected"
         }
       ]
     },
