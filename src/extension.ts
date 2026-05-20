@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import { AuthManager } from './auth/authManager';
+import { ConnectionStatusItem } from './auth/connectionStatusItem';
 import { ContextStore } from './store/contextStore';
 import { ContextTreeProvider } from './hierarchy/contextTreeProvider';
 import { CacheManager } from './cache/cacheManager';
@@ -29,6 +30,8 @@ export async function activate(context: vscode.ExtensionContext) {
     log('Tachikoma extension activating...');
 
     const authManager = new AuthManager();
+    const connectionStatusItem = new ConnectionStatusItem(authManager);
+    context.subscriptions.push(connectionStatusItem);
     const store = new ContextStore(context.globalState);
     const contextTree = new ContextTreeProvider();
     const collabManager = new CollaborationManager();
@@ -299,6 +302,19 @@ export async function activate(context: vscode.ExtensionContext) {
                     log(`Terminal replay skipped: ${err}`);
                 }
             }
+        }
+
+        // Surface the Tachikoma activity bar and focus the Contexts tree
+        // so the user immediately sees the monorepo after connecting.
+        try {
+            await vscode.commands.executeCommand(
+                'workbench.view.extension.tachikomaExplorer',
+            );
+            await vscode.commands.executeCommand(
+                'tachikomaContextTree.focus',
+            );
+        } catch (err) {
+            log(`Auto-focus tachikomaContextTree failed (non-fatal): ${err}`);
         }
     });
 

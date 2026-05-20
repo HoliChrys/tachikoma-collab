@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -347,6 +347,64 @@
         "name": "tachikoma",
         "description": "Talk to your Tachikoma agents (Hermes runtime, MCP tools)",
         "isSticky": true
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "tachikoma.getStarted",
+        "title": "Get Started with Tachikoma",
+        "description": "Connect to your Tachikoma computer, browse your monorepo, open a remote terminal, and chat with @tachikoma agents.",
+        "steps": [
+          {
+            "id": "tachikoma.walkthrough.connect",
+            "title": "Connect with API Token",
+            "description": "Paste a Tachikoma API token to link this editor to your computer. [Connect with API Token](command:tachikoma.connectWithToken)",
+            "media": {
+              "markdown": "media/walkthrough/connect.md"
+            },
+            "completionEvents": [
+              "onCommand:tachikoma.connectWithToken"
+            ]
+          },
+          {
+            "id": "tachikoma.walkthrough.browse",
+            "title": "Browse your monorepo",
+            "description": "Open the Tachikoma activity bar to navigate galaxies, systems, and spaces. [Open Contexts](command:tachikomaContextTree.focus)",
+            "media": {
+              "markdown": "media/walkthrough/browse.md"
+            },
+            "completionEvents": [
+              "onView:tachikomaContextTree"
+            ]
+          },
+          {
+            "id": "tachikoma.walkthrough.zellij",
+            "title": "Open a zellij terminal",
+            "description": "Start a Tachikoma (zellij) terminal from the integrated terminal profile dropdown to attach to a shared remote session.",
+            "media": {
+              "markdown": "media/walkthrough/zellij.md"
+            }
+          },
+          {
+            "id": "tachikoma.walkthrough.chat",
+            "title": "Chat with @tachikoma",
+            "description": "Open the chat view and talk to your agents via the @tachikoma participant. [Chat with @tachikoma](command:workbench.action.chat.open?%7B%22query%22%3A%22%40tachikoma%20%22%7D)",
+            "media": {
+              "markdown": "media/walkthrough/chat.md"
+            }
+          },
+          {
+            "id": "tachikoma.walkthrough.mcp",
+            "title": "Manage MCP profile",
+            "description": "Pick the MCP capability profile that scopes your agents tools and dashboards. [Open MCP Copilot](command:tachikoma.copilot.open)",
+            "media": {
+              "markdown": "media/walkthrough/mcp.md"
+            },
+            "completionEvents": [
+              "onCommand:tachikoma.copilot.open"
+            ]
+          }
+        ]
       }
     ]
   },
