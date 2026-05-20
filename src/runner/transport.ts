@@ -54,8 +54,42 @@ export interface RunnerStateSnapshot {
 // CJS file at bundle time, so no npm resolution is involved.
 type CreateTransportFn = (cfg: TransportConfig) => Promise<TransportClient>;
 
+/**
+ * The vendored transport bundle was authored for browsers and references the
+ * bare `EventSource` identifier (sse-client.ts line 105). Under Node.js (the
+ * extension host) `globalThis.EventSource` is undefined, so the very first
+ * `subscribe()` call after `createTransport()` throws `ReferenceError:
+ * EventSource is not defined`. That error propagates up to initRunner's
+ * try/catch, which only logs it via logError -- so the runner stays silently
+ * stuck in 'connecting' (or 'error') forever and the user sees no terminal
+ * action from the backend agent. Polyfill globalThis.EventSource with the
+ * `eventsource` npm package (already a dep, used by other modules) before
+ * loading the vendor bundle.
+ */
+function ensureEventSourcePolyfill(): void {
+    const g = globalThis as unknown as { EventSource?: unknown };
+    if (typeof g.EventSource !== 'undefined') return;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const es = require('eventsource');
+        // The package exports a named `EventSource` constructor (v3.x).
+        const ctor = es.EventSource ?? es.default ?? es;
+        if (typeof ctor === 'function') {
+            g.EventSource = ctor;
+        } else {
+            logError(
+                'runner: eventsource polyfill load returned non-constructor',
+                new Error(typeof ctor),
+            );
+        }
+    } catch (e) {
+        logError('runner: eventsource polyfill install failed', e);
+    }
+}
+
 function loadCreateTransport(): CreateTransportFn | null {
     try {
+        ensureEventSourcePolyfill();
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const mod = require('./vendor/transport/index.js');
         return mod.createTransport as CreateTransportFn;
