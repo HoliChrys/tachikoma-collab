@@ -19,6 +19,8 @@ import { registerTachikomaChatParticipant } from './chat/chatParticipant';
 import { initRunner } from './runner';
 import { AgentsTreeProvider } from './agents/agentsView';
 import { registerAgentCommands } from './agents/swarmCommands';
+import { registerComposer } from './composer';
+import { initFloatingPanes } from './floating';
 import { McpProfileStore } from './store/mcpProfileStore';
 import { McpProfileSseBridge } from './store/mcpProfileSseBridge';
 import { McpCopilotTreeProvider } from './copilot/treeProvider';
@@ -698,6 +700,61 @@ export async function activate(context: vscode.ExtensionContext) {
     // VI-1g: Tachikoma (zellij) terminal profile -- spawns zellij attach
     // against the active context's zweb server. See src/terminal/zellijProfile.ts.
     registerZellijProfileProvider(context, authManager, store);
+
+    // VI-1c : register runner contrib (WebTransport RPC for backend agent control)
+    try {
+        const runnerDisposable = initRunner(context, authManager);
+        context.subscriptions.push(runnerDisposable);
+    } catch (err) {
+        log(`Runner registration failed: ${(err as Error).message}`);
+    }
+
+    // VI-1d : agents + swarms tree view + commands (404-tolerant)
+    try {
+        const agentsProvider = new AgentsTreeProvider(authManager);
+        const agentsTreeView = vscode.window.createTreeView('tachikomaAgents', {
+            treeDataProvider: agentsProvider,
+        });
+        const agentCommands = registerAgentCommands(authManager, () => agentsProvider.refresh());
+        context.subscriptions.push(agentsTreeView, agentCommands, agentsProvider);
+    } catch (err) {
+        log(`Agents tree registration failed: ${(err as Error).message}`);
+    }
+    // VI-1d+ : Composer (Cmd+I)
+    try {
+        const composerDisposable = registerComposer(context, authManager);
+        context.subscriptions.push(composerDisposable);
+    } catch (err) {
+        log(`Composer registration failed: ${(err as Error).message}`);
+    }
+
+    // VI-1f : floating panes IDE-side overlay (needs runner transport + computer_id)
+    // Wired inside the auth flow because we need the active transport client and computerId.
+    authManager.onDidConnect(async () => {
+        try {
+            // The runner contrib's transport is the source of truth for computer_id.
+            // For now, derive computer_id from the same pattern : `vscode-${host}-${userId}`.
+            const host = authManager.getHostUrl();
+            const userId = authManager.getUserId();
+            if (!host || !userId) return;
+            const computerId = `vscode-${new URL(host).hostname}-${userId}`;
+            // Lazy import the vendored transport to keep extension.ts free of direct dep.
+            const { createTransport } = require('./runner/vendor/transport');
+            const token = await context.secrets.get('tachikoma.token');
+            if (!token) return;
+            const transport = await createTransport({ baseUrl: host, token, autoReconnect: true });
+            const disposable = await initFloatingPanes(transport, computerId, {
+                emit: (action) => {
+                    // Outbound bridge : POST the floating pane action to /api/runner/event
+                    // (or whatever bridge the backend exposes - V2 wire-up).
+                    log(`floating action ${action.type} pane=${action.pane_id}`);
+                },
+            });
+            context.subscriptions.push(disposable);
+        } catch (err) {
+            log(`Floating panes init failed: ${(err as Error).message}`);
+        }
+    });
 
     // Always try to reconnect on activation if a session token is stored.
     // The token is valid for 24h and the refresh API extends it — session persists across reloads.

@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer, browse monorepo contexts, and collaboratively edit files in real-time with colored presence indicators.",
-  "version": "5.7.0",
+  "version": "5.8.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -159,6 +159,11 @@
         "command": "tachikoma.swarm.addMember",
         "title": "Add Agent to Swarm",
         "category": "Tachikoma"
+      },
+      {
+        "command": "tachikoma.composer.open",
+        "title": "Composer (Cmd+I)",
+        "category": "Tachikoma"
       }
     ],
     "keybindings": [
@@ -167,6 +172,14 @@
         "key": "ctrl+shift+alt+c",
         "mac": "cmd+shift+alt+c",
         "when": "editorHasSelection"
+      },
+      {
+        "command": "tachikoma.composer.open",
+        "key": "cmd+i",
+        "mac": "cmd+i",
+        "win": "ctrl+i",
+        "linux": "ctrl+i",
+        "when": "tachikoma:connected"
       }
     ],
     "menus": {
@@ -337,6 +350,16 @@
           "type": "boolean",
           "default": true,
           "description": "Close tracked terminals when disconnecting from Tachikoma."
+        },
+        "tachikoma.inlineCompletion.engine": {
+          "type": "string",
+          "enum": [
+            "tachikoma",
+            "copilot",
+            "off"
+          ],
+          "default": "tachikoma",
+          "description": "Engine for inline completion: tachikoma (POST /api/agent/completion), copilot (delegate), off."
         }
       }
     },
