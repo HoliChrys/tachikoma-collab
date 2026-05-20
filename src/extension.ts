@@ -160,7 +160,20 @@ export async function activate(context: vscode.ExtensionContext) {
 
     let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
     let localDaemonTerminal: vscode.Terminal | null = null;
-    const machineId = `vscode-${os.hostname()}-${os.userInfo().username}`;
+    // Stable machine_id across network mode changes.
+    //
+    // `os.hostname()` on macOS returns different values depending on whether
+    // a Tailscale interface is the primary route (`-.taila29aef.ts.net`)
+    // or mDNS is (`-.local`). It also varies in case. Without normalisation
+    // the server sees 3 distinct machine_ids for the same laptop and only
+    // one is registered — the other two log 404 on every heartbeat.
+    //
+    // Normalise: first DNS label only, lowercase. Produces
+    // `vscode-chrysostomes-macbook-pro-chrysostomebeltran` regardless of
+    // network state, stays human-readable.
+    const _rawHost = os.hostname();
+    const _hostLabel = (_rawHost.split('.')[0] || _rawHost).toLowerCase();
+    const machineId = `vscode-${_hostLabel}-${os.userInfo().username}`;
     const LOCAL_DAEMON_PORT = 9321;
 
     const daemonStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);

@@ -1,10 +1,17 @@
 // VI-1d agent + swarm REST wrapper.
 //
-// Backend endpoints `/api/agents` and `/api/swarms` are NOT YET available
-// (see .agents/context/consume/backend-endpoint-status.md, 2026-05-20).
-// Every call here is wired so that when the backend ships the endpoints
-// the surface stays identical. Until then, a 404 is translated into a
-// well-known Error so the UI layer can surface "feature unavailable".
+// Endpoint status (as of 2026-05-20):
+//   GET  /api/users/agents      — IMPLEMENTED (users.py:173)
+//   POST /api/users/agents      — IMPLEMENTED (users.py:181, admin only)
+//   GET  /api/agents/{id}       — NOT YET (no server route)
+//   POST /api/agents/{id}/stop  — NOT YET (no server route)
+//   GET  /api/swarms            — NOT YET (no server route)
+//   POST /api/swarms            — NOT YET (no server route)
+//   POST /api/swarms/{id}/members         — NOT YET
+//   DELETE /api/swarms/{id}/members/{aid} — NOT YET
+//
+// The wrapper translates HTTP 404 into a sentinel Error so call-sites
+// can degrade gracefully while the unimplemented endpoints stay 404.
 //
 // Spec: .agents/specs/to_do/VI-1d-agent-hosting.md.
 // ASCII only, 4-space indent.
@@ -86,15 +93,20 @@ export class AgentsApiClient {
     // --- Agents ---
 
     async listAgents(userId: string): Promise<AgentRecord[]> {
+        // Server lives at /api/users/agents (users.py:173). The owner_id
+        // filter is not honoured server-side yet — the endpoint returns
+        // ALL agent-type users — but the query param is harmless and
+        // we keep it for when the filter lands.
         const qs = userId ? `?owner_id=${encodeURIComponent(userId)}` : '';
         const resp = await this.request<AgentRecord[] | { agents: AgentRecord[] }>(
-            'GET', `/api/agents${qs}`,
+            'GET', `/api/users/agents${qs}`,
         );
         return Array.isArray(resp) ? resp : (resp.agents ?? []);
     }
 
     async spawnAgent(template: string, name: string, machineIds: string[]): Promise<AgentRecord> {
-        return this.request<AgentRecord>('POST', '/api/agents', {
+        // Server: POST /api/users/agents (users.py:181, admin only).
+        return this.request<AgentRecord>('POST', '/api/users/agents', {
             template,
             name,
             machine_ids: machineIds,

@@ -31,7 +31,12 @@ const TEMPLATES = ['claude', 'openclaw', 'react'] as const;
 const TOPOLOGIES = ['mesh', 'star', 'hierarchical'] as const;
 
 function localComputerId(): string {
-    return `vscode-${os.hostname()}-${os.userInfo().username}`;
+    // Same normalisation as extension.ts:163 (first DNS label only,
+    // lowercase) so this id is stable across mDNS / Tailscale FQDN
+    // flips and matches the one the heartbeat loop sends.
+    const rawHost = os.hostname();
+    const label = (rawHost.split('.')[0] || rawHost).toLowerCase();
+    return `vscode-${label}-${os.userInfo().username}`;
 }
 
 function requireApi(authManager: AuthManager): AgentsApiClient | null {
