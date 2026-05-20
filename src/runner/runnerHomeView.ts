@@ -299,7 +299,154 @@ export class RunnerHomeViewProvider implements vscode.WebviewViewProvider {
             linear-gradient(180deg, var(--tk-bg) 0%, var(--tk-bg-2) 100%);
         overflow: hidden;
     }
-    body { display: flex; flex-direction: column; }
+    body { display: flex; flex-direction: row; }
+
+    /* ── pulse keyframe (online icon background) ────────────────────── */
+    @keyframes tk-pulse {
+        0%   { box-shadow: 0 0 0 0   rgba(16, 185, 129, 0.55); }
+        70%  { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0.00); }
+        100% { box-shadow: 0 0 0 0   rgba(16, 185, 129, 0.00); }
+    }
+
+    /* ── mini sidebar ───────────────────────────────────────────────── */
+    .sidebar {
+        flex: 0 0 auto;
+        width: 56px;
+        height: 100%;
+        background: rgba(13, 10, 31, 0.78);
+        border-right: 1px solid var(--tk-glass-border);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        overflow: hidden;
+        transition: width 180ms ease;
+        z-index: 30;
+        display: flex;
+        flex-direction: column;
+    }
+    .sidebar:hover { width: 240px; }
+    .sidebar-title {
+        flex: 0 0 auto;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--tk-text-dimer);
+        padding: 12px 14px 6px;
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 180ms ease;
+    }
+    .sidebar:hover .sidebar-title { opacity: 1; }
+    .sidebar-list {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 6px 6px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .sb-entry {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        color: var(--tk-text);
+        border: 1px solid transparent;
+        background: rgba(255, 255, 255, 0.02);
+        transition: background 120ms ease, border-color 120ms ease;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .sb-entry:hover {
+        background: rgba(123, 77, 255, 0.14);
+        border-color: rgba(165, 132, 255, 0.32);
+    }
+    .sb-icon {
+        position: relative;
+        flex: 0 0 32px;
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .sb-entry[data-node-type="local"]  .sb-icon { background: var(--col-local-bg);  border: 1px solid var(--col-local-border);  color: var(--col-local-primary); }
+    .sb-entry[data-node-type="server"] .sb-icon { background: var(--col-server-bg); border: 1px solid var(--col-server-border); color: var(--col-server-primary); }
+    .sb-entry[data-node-type="cloud"]  .sb-icon { background: var(--col-cloud-bg);  border: 1px solid var(--col-cloud-border);  color: var(--col-cloud-primary); }
+    .sb-icon svg { width: 16px; height: 16px; }
+    .sb-entry[data-status="online"] .sb-icon {
+        animation: tk-pulse 2.4s ease infinite;
+    }
+    .sb-dot {
+        position: absolute;
+        right: -2px; bottom: -2px;
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        border: 2px solid rgba(13, 10, 31, 0.95);
+    }
+    .sb-entry[data-status="online"]  .sb-dot { background: var(--tk-online); }
+    .sb-entry[data-status="offline"] .sb-dot { background: var(--tk-offline); }
+    .sb-entry[data-status="busy"]    .sb-dot { background: var(--tk-busy); }
+    .sb-meta {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        opacity: 0;
+        transition: opacity 180ms ease;
+    }
+    .sidebar:hover .sb-meta { opacity: 1; }
+    .sb-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--tk-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .sb-ip {
+        font-size: 10px;
+        color: var(--tk-text-dim);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .sb-pill {
+        flex: 0 0 auto;
+        font-size: 9px;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 999px;
+        text-transform: capitalize;
+        border: 1px solid;
+        opacity: 0;
+        transition: opacity 180ms ease;
+    }
+    .sidebar:hover .sb-pill { opacity: 1; }
+    .sb-pill.status-online  { color: var(--tk-online);  background: rgba(16, 185, 129, 0.12);  border-color: rgba(16, 185, 129, 0.35); }
+    .sb-pill.status-offline { color: var(--tk-offline); background: rgba(107, 114, 128, 0.12); border-color: rgba(107, 114, 128, 0.30); }
+    .sb-pill.status-busy    { color: var(--tk-busy);    background: rgba(245, 158, 11, 0.12);  border-color: rgba(245, 158, 11, 0.32); }
+    .sb-empty {
+        font-size: 11px;
+        color: var(--tk-text-dimer);
+        padding: 8px 10px;
+        opacity: 0;
+        transition: opacity 180ms ease;
+    }
+    .sidebar:hover .sb-empty { opacity: 1; }
+
+    .main-wrap {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
     .header {
         flex: 0 0 auto;
         display: flex;
@@ -565,31 +712,39 @@ export class RunnerHomeViewProvider implements vscode.WebviewViewProvider {
 </style>
 </head>
 <body>
-<div class="header">
-    <h1>Runner</h1>
-    <span class="badge-count" id="badge-count">0 computers</span>
-    <span class="header-spacer"></span>
-    <button class="header-btn" id="btn-refresh" type="button" title="Refresh">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.9L13.5 5.5"/>
-            <path d="M13.5 2.5v3h-3"/>
-            <path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.9L2.5 10.5"/>
-            <path d="M2.5 13.5v-3h3"/>
-        </svg>
-        Refresh
-    </button>
-</div>
-<div id="error-toast" class="error-toast"></div>
-<div class="canvas-wrap">
-    <div id="canvas" class="canvas">
-        <div id="empty-state" class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="12" rx="2"/>
-                <path d="M8 20h8"/>
-                <path d="M12 16v4"/>
+<aside class="sidebar" id="sidebar" aria-label="Computers">
+    <div class="sidebar-title">Computers</div>
+    <div class="sidebar-list" id="sidebar-list">
+        <div class="sb-empty" id="sb-empty">No computers</div>
+    </div>
+</aside>
+<div class="main-wrap">
+    <div class="header">
+        <h1>Runner</h1>
+        <span class="badge-count" id="badge-count">0 computers</span>
+        <span class="header-spacer"></span>
+        <button class="header-btn" id="btn-refresh" type="button" title="Refresh">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.9L13.5 5.5"/>
+                <path d="M13.5 2.5v3h-3"/>
+                <path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.9L2.5 10.5"/>
+                <path d="M2.5 13.5v-3h3"/>
             </svg>
-            <div class="title">No computers yet</div>
-            <div class="sub">Register a runner from a sandbox or the CLI to see it here.</div>
+            Refresh
+        </button>
+    </div>
+    <div id="error-toast" class="error-toast"></div>
+    <div class="canvas-wrap">
+        <div id="canvas" class="canvas">
+            <div id="empty-state" class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="12" rx="2"/>
+                    <path d="M8 20h8"/>
+                    <path d="M12 16v4"/>
+                </svg>
+                <div class="title">No computers yet</div>
+                <div class="sub">Register a runner from a sandbox or the CLI to see it here.</div>
+            </div>
         </div>
     </div>
 </div>
@@ -601,6 +756,8 @@ export class RunnerHomeViewProvider implements vscode.WebviewViewProvider {
     var emptyState = document.getElementById('empty-state');
     var badgeCount = document.getElementById('badge-count');
     var errorToast = document.getElementById('error-toast');
+    var sidebarList = document.getElementById('sidebar-list');
+    var sbEmpty = document.getElementById('sb-empty');
     document.getElementById('btn-refresh').addEventListener('click', function () {
         vscode.postMessage({ type: 'refresh' });
     });
@@ -791,12 +948,62 @@ export class RunnerHomeViewProvider implements vscode.WebviewViewProvider {
         return { x: 24 + col * 300, y: 24 + row * 240 };
     }
 
+    function buildSidebarEntry(comp) {
+        var type = classifyType(comp);
+        var status = statusOf(comp);
+        var ip = tailscaleIp(comp);
+        var name = comp.name || comp.hostname || comp.machine_id;
+
+        var entry = document.createElement('div');
+        entry.className = 'sb-entry';
+        entry.dataset.machineId = comp.machine_id;
+        entry.dataset.nodeType = type;
+        entry.dataset.status = status;
+        entry.title = name + ' (' + ip + ') - ' + status;
+
+        entry.innerHTML = ''
+            + '<div class="sb-icon">'
+            +     pickIcon(type)
+            +     '<span class="sb-dot"></span>'
+            + '</div>'
+            + '<div class="sb-meta">'
+            +     '<span class="sb-name">' + escHtml(name) + '</span>'
+            +     '<span class="sb-ip">' + escHtml(ip) + '</span>'
+            + '</div>'
+            + '<span class="sb-pill status-' + status + '">' + escHtml(status) + '</span>';
+
+        entry.addEventListener('click', function () {
+            var card = canvas.querySelector('.card[data-machine-id="' + comp.machine_id + '"]');
+            if (card && typeof card.scrollIntoView === 'function') {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+        });
+
+        return entry;
+    }
+
+    function renderSidebar(computers) {
+        var oldEntries = sidebarList.querySelectorAll('.sb-entry');
+        for (var i = 0; i < oldEntries.length; i++) {
+            oldEntries[i].parentNode.removeChild(oldEntries[i]);
+        }
+        if (!computers || computers.length === 0) {
+            sbEmpty.style.display = '';
+            return;
+        }
+        sbEmpty.style.display = 'none';
+        computers.forEach(function (comp) {
+            sidebarList.appendChild(buildSidebarEntry(comp));
+        });
+    }
+
     function render(computers) {
         // Remove only the cards; keep the empty-state node intact.
         var oldCards = canvas.querySelectorAll('.card');
         for (var i = 0; i < oldCards.length; i++) {
             oldCards[i].parentNode.removeChild(oldCards[i]);
         }
+        renderSidebar(computers);
         if (!computers || computers.length === 0) {
             emptyState.style.display = '';
             return;
