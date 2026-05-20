@@ -399,6 +399,95 @@ export class TachikomaClient {
         return this.request('POST', `/api/network/computers/${machineId}/heartbeat`);
     }
 
+    // ── Network inventory (Runner whiteboard) ──────────────────────────
+    //
+    // GET /api/network/computers      → list[ComputerResponse] (ACL-filtered)
+    // GET /api/network/               → NetworkResponse summary + computers
+    //
+    // The shapes mirror tachikoma.monorepo.api.models.responses (see
+    // ComputerResponse / NetworkResponse). Keep them in sync if the
+    // backend adds new fields — the RunnerHomeView only reads a subset
+    // (name, host, ip_addresses, state, node_type, os_*, last_seen_at).
+
+    async getNetworkComputers(): Promise<ComputerResponse[]> {
+        return this.request<ComputerResponse[]>('GET', '/api/network/computers');
+    }
+
+    async getNetworkSummary(): Promise<NetworkResponse> {
+        return this.request<NetworkResponse>('GET', '/api/network/');
+    }
+
+    /**
+     * Subscribe to live computer events.
+     *
+     * The backend exposes `/api/events/stream` (server.tachikoma.api.routers.events_sse)
+     * which supports an `entities` whitelist — passing `entities=computer`
+     * narrows the stream to `computer.*` events (discovered/updated/
+     * decommissioned) plus per-computer node.heartbeat noise we filter
+     * client-side by `entity_type`.
+     *
+     * Returns a disposable that closes the underlying EventSource.
+     * Errors trigger the polyfill's exponential backoff reconnect; on a
+     * total failure the caller falls back to polling.
+     */
+    subscribeNetworkSse(
+        onEvent: (event: NetworkEvent) => void,
+    ): { dispose(): void } {
+        if (!this.baseUrl || !this.token) {
+            log('subscribeNetworkSse: no auth, returning noop disposable');
+            return { dispose: () => { /* noop */ } };
+        }
+        const url = `${this.baseUrl}/api/events/stream`
+            + `?entities=computer`
+            + `&exclude_types=node.heartbeat`
+            + `&token=${encodeURIComponent(this.token)}`;
+        const controller = new AbortController();
+        log(`Network SSE subscribe ${url.replace(/token=[^&]+/, 'token=***')}`);
+
+        (async () => {
+            try {
+                const res = await fetch(url, {
+                    signal: controller.signal,
+                    headers: { Accept: 'text/event-stream' },
+                });
+                if (!res.ok || !res.body) {
+                    log(`Network SSE failed: ${res.status}`);
+                    return;
+                }
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buf = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buf += decoder.decode(value, { stream: true });
+                    let idx;
+                    while ((idx = buf.indexOf('\n\n')) !== -1) {
+                        const block = buf.slice(0, idx);
+                        buf = buf.slice(idx + 2);
+                        const dataLines = block.split('\n').filter(l => l.startsWith('data: '));
+                        if (dataLines.length === 0) continue;
+                        const raw = dataLines.map(l => l.slice(6)).join('\n');
+                        try {
+                            const parsed = JSON.parse(raw);
+                            if (parsed && typeof parsed === 'object') {
+                                onEvent(parsed as NetworkEvent);
+                            }
+                        } catch {
+                            /* ignore parse errors */
+                        }
+                    }
+                }
+            } catch (err) {
+                if ((err as Error).name !== 'AbortError') {
+                    log(`Network SSE error: ${(err as Error).message}`);
+                }
+            }
+        })();
+
+        return { dispose: () => controller.abort() };
+    }
+
     // ── MCP profiles + active profile (E5+) ────────────────────────────
 
     /** List MCPProfileRecord visible to *userId* (granted directly or
@@ -458,4 +547,54 @@ export interface ActiveProfileResponse {
     user_id: string;
     active_profile_id: string;
     profile: MCPProfile | null;
+}
+
+// ── Network inventory types (mirror api/models/responses.py) ──────────
+
+export interface ComputerResponse {
+    id: string;
+    machine_id: string;
+    hostname: string;
+    name: string;
+    node_type: string;           // local | server | cloud
+    state: string;               // online | offline | busy
+    ip_addresses: string[];
+    public_ip: string;
+    ssh_port: number;
+    os_type: string;
+    os_version: string;
+    runner_installed: boolean;
+    runner_status: string;
+    allowed_contexts?: string[];
+    owner_id: string;
+    provisioned_users: string[];
+    provisioned_agents: string[];
+    last_seen_at: string;
+    last_heartbeat_at: string;
+    is_ready: boolean;
+    created_at: string;
+}
+
+export interface NetworkResponse {
+    computers: ComputerResponse[];
+    total: number;
+    online: number;
+    cloud_nodes: number;
+    server_nodes: number;
+    local_nodes: number;
+}
+
+/**
+ * Live event frame from `/api/events/stream`. The backend emits a generic
+ * envelope (channel, event_type, entity_type, entity_id, payload, ts) —
+ * we keep it loose so future fields are passed through untouched.
+ */
+export interface NetworkEvent {
+    event_type?: string;
+    entity_type?: string;
+    entity_id?: string;
+    channel?: string;
+    payload?: Record<string, unknown>;
+    ts?: string;
+    [key: string]: unknown;
 }

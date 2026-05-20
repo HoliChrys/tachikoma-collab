@@ -79,12 +79,12 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('tachikomaCollaborators', collaboratorsProvider),
         vscode.window.registerTreeDataProvider('tachikomaSessionsHome', sessionsProvider),
         // v5.15: dedicated Runner activity-bar container. The provider is
-        // a styled placeholder until the live runner UI lands; the icon
-        // and container id are stable across releases so user muscle memory
-        // and keybindings keep working.
+        // live Runner whiteboard — see runnerHomeView.ts. The provider
+        // consumes the AuthManager (subscribe/refresh on connect) and
+        // talks to /api/network/computers + /api/events/stream.
         vscode.window.registerWebviewViewProvider(
             RunnerHomeViewProvider.viewType,
-            new RunnerHomeViewProvider(context),
+            new RunnerHomeViewProvider(context, authManager),
         ),
     );
 
@@ -555,6 +555,43 @@ export async function activate(context: vscode.ExtensionContext) {
                 title: `Local Terminal`,
                 sessionId,
             });
+        }),
+
+        // ── Runner whiteboard commands ──────────────────────────────────
+        // openTerminal: spawns a vscode terminal running `ssh <name>`.
+        // This assumes the user already has SSH keys configured to the
+        // machine (Tailscale MagicDNS or hosts entry). A future pass can
+        // borrow a per-machine credential via /api/credentials/borrow.
+        vscode.commands.registerCommand('tachikoma.runner.openTerminal', async (machineId?: string) => {
+            if (typeof machineId !== 'string' || !machineId) {
+                vscode.window.showWarningMessage('Runner: missing machine id');
+                return;
+            }
+            const client = authManager.getClient();
+            if (!client) {
+                vscode.window.showWarningMessage('Runner: not connected');
+                return;
+            }
+            let target = machineId;
+            try {
+                const computers = await client.getNetworkComputers();
+                const comp = computers.find(c => c.machine_id === machineId);
+                if (comp) {
+                    target = comp.name || comp.hostname || machineId;
+                }
+            } catch (err) {
+                log(`runner.openTerminal: lookup failed, using machine_id as host (${(err as Error).message})`);
+            }
+            const term = vscode.window.createTerminal({ name: `ssh ${target}` });
+            term.show(true);
+            term.sendText(`ssh ${target}`);
+            vscode.window.showInformationMessage(
+                `Runner: opening ssh ${target} (make sure SSH keys are provisioned).`,
+            );
+        }),
+        vscode.commands.registerCommand('tachikoma.runner.attach', async (machineId?: string) => {
+            const label = typeof machineId === 'string' && machineId ? machineId : 'runner';
+            vscode.window.showInformationMessage(`Attach to ${label}: coming soon`);
         }),
 
         // Open file from context tree → sync to cache then open local file
