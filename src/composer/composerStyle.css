@@ -1,0 +1,98 @@
+/*
+ * Composer — spotlight-style floating prompt.
+ *
+ * Used by the V2 webview variant (see composerPanel.ts header). The V1
+ * QuickInput implementation cannot consume this stylesheet because the
+ * QuickInput DOM is owned by the VS Code shell. Keeping the design here
+ * locks the visual target so V2 can adopt it without re-deriving it
+ * from the landingpage SpotlightInput reference.
+ */
+
+.tachikoma-composer {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    width: 90%;
+    max-width: 640px;
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    height: 56px;
+
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(12, 12, 20, 0.85);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.30);
+
+    transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.tachikoma-composer--hidden {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+    pointer-events: none;
+}
+
+.tachikoma-composer__orb {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, #a855f7 0%, #22d3ee 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+}
+
+.tachikoma-composer__orb--loading {
+    animation: tachikoma-composer-pulse 1.4s ease-in-out infinite;
+}
+
+.tachikoma-composer__input {
+    flex: 1 1 auto;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 13px;
+    line-height: 1.4;
+    resize: none;
+    min-height: 20px;
+    max-height: 120px;
+}
+
+.tachikoma-composer__input::placeholder {
+    color: rgba(255, 255, 255, 0.30);
+}
+
+.tachikoma-composer__send {
+    flex: 0 0 auto;
+    padding: 8px;
+    border-radius: 9999px;
+    border: none;
+    background: rgba(168, 85, 247, 0.20);
+    color: #d8b4fe;
+    cursor: pointer;
+    transition: background-color 160ms ease, opacity 160ms ease;
+}
+
+.tachikoma-composer__send:hover:not(:disabled) {
+    background: rgba(168, 85, 247, 0.30);
+}
+
+.tachikoma-composer__send:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+@keyframes tachikoma-composer-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}

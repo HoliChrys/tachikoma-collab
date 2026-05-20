@@ -1,0 +1,91 @@
+/* VI-1f floating panes - glass overlay stylesheet.                          */
+/* Loaded by the workbench at runtime (see VI-1f-floating-windows.md).       */
+/* ASCII only, 4-space indent.                                               */
+
+.tachikoma-floating-pane {
+    position: absolute;
+    z-index: 9999;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: rgba(24, 20, 31, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    border-radius: 12px;
+    box-shadow:
+        0 16px 64px rgba(0, 0, 0, 0.50),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    transition: box-shadow 120ms ease-out, border-color 120ms ease-out;
+}
+
+.tachikoma-floating-pane:focus-within {
+    border-color: rgba(167, 139, 250, 0.80);
+    box-shadow:
+        0 16px 64px rgba(0, 0, 0, 0.50),
+        0 0 0 1px rgba(167, 139, 250, 0.45),
+        0 0 24px rgba(167, 139, 250, 0.35);
+}
+
+.tachikoma-floating-pane__dragbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    cursor: move;
+    background: rgba(255, 255, 255, 0.05);
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    user-select: none;
+}
+
+.tachikoma-floating-pane__dragbar:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.tachikoma-floating-pane__close {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.70);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 16px;
+    text-align: center;
+}
+
+.tachikoma-floating-pane__close:hover {
+    background: rgba(255, 80, 80, 0.40);
+    color: #ffffff;
+}
+
+.tachikoma-floating-pane__body {
+    position: absolute;
+    top: 24px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.tachikoma-floating-pane__resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    height: 14px;
+    cursor: nwse-resize;
+    background:
+        linear-gradient(
+            135deg,
+            transparent 0%,
+            transparent 50%,
+            rgba(255, 255, 255, 0.30) 50%,
+            rgba(255, 255, 255, 0.30) 100%
+        );
+    border-bottom-right-radius: 12px;
+}
