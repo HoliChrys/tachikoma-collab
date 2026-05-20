@@ -25,6 +25,7 @@ import { registerInlineCompletions } from './inline';
 import { NativeMcpSettingsProvider } from './copilot/nativeMcpSettings';
 import { registerTachikomaWelcome } from './welcome';
 import { TachikomaStatusBar } from './auth/statusBarItems';
+import { registerContextSwitcher } from './contextSwitcher';
 import { McpProfileStore } from './store/mcpProfileStore';
 import { McpProfileSseBridge } from './store/mcpProfileSseBridge';
 import { McpCopilotTreeProvider } from './copilot/treeProvider';
