@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer: browse monorepo contexts, edit remote files, attach zellij/tmux terminals, and live-collaborate via CRDT.",
-  "version": "5.15.1",
+  "version": "5.15.2",
   "license": "MIT",
   "icon": "media/icon-128.png",
   "homepage": "https://github.com/HoliChrys/tachikoma-collab#readme",
@@ -499,7 +499,11 @@
           }
         ]
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "workbench.startupEditor": "none",
+      "workbench.welcomePage.walkthroughs.openOnInstall": false
+    }
   },
   "scripts": {
     "compile:yjs": "esbuild node_modules/yjs/dist/yjs.cjs --bundle --outfile=dist/yjs-bundle.js --format=cjs --platform=node --minify",
