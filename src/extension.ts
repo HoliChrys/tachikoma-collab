@@ -13,6 +13,8 @@ import { TerminalStateSync } from './terminals/terminalStateSync';
 import { replayTerminals } from './terminals/terminalReplay';
 import { log, getOutputChannel } from './log';
 import { openLocalTerminalPanel } from './terminal/terminalPanel';
+import { registerZellijProfileProvider } from './terminal/zellijProfile';
+import { registerTachikomaChatParticipant } from './chat/chatParticipant';
 import { McpProfileStore } from './store/mcpProfileStore';
 import { McpProfileSseBridge } from './store/mcpProfileSseBridge';
 import { McpCopilotTreeProvider } from './copilot/treeProvider';
@@ -316,6 +318,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('tachikoma.connect', () => authManager.connect(context)),
+        vscode.commands.registerCommand('tachikoma.connectWithToken', async () => {
+            const host = await vscode.window.showInputBox({
+                prompt: 'Tachikoma monorepo endpoint',
+                placeHolder: 'http://dev-005:8000 or https://tachikoma.sh',
+                value: 'http://dev-005:8000',
+                ignoreFocusOut: true,
+            });
+            if (!host) return;
+            const token = await vscode.window.showInputBox({
+                prompt: `Paste your Tachikoma API token for ${host}`,
+                password: true,
+                placeHolder: 'Token from the Tachikoma CLI or dashboard',
+                ignoreFocusOut: true,
+                validateInput: (v) => v.length < 16 ? 'Token too short' : null,
+            });
+            if (!token) return;
+            await authManager.connectWithToken(context, host, token);
+        }),
         vscode.commands.registerCommand('tachikoma.disconnect', () => authManager.disconnect(context)),
         vscode.commands.registerCommand('tachikoma.showOutput', () => getOutputChannel().show(true)),
 
@@ -659,6 +679,14 @@ export async function activate(context: vscode.ExtensionContext) {
     // Always try to reconnect on activation if a session token is stored.
     // The token is valid for 24h and the refresh API extends it — session persists across reloads.
     log('Attempting to restore session from stored token...');
+    // VI-1b Option C: register @tachikoma chat participant (VS Code 1.95+ chat API)
+    try {
+        const chatParticipant = registerTachikomaChatParticipant(context, authManager);
+        context.subscriptions.push(chatParticipant);
+    } catch (err) {
+        log(`Chat participant registration failed: ${(err as Error).message}`);
+    }
+
     void authManager.tryReconnect(context);
 
     context.subscriptions.push(authManager, store, collabManager, sessionsProvider, getOutputChannel());

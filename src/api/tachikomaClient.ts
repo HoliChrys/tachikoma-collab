@@ -123,6 +123,81 @@ export class TachikomaClient {
 
     // --- Users ---
 
+    /**
+     * VI-1b Option C: POST /api/agent/chat with a NL prompt.
+     * Returns synchronous ACK; real replies arrive via SSE on user.{user_id}.chat.
+     */
+    async sendChatMessage(content: string, contextPath: string = ''): Promise<{
+        message_id: string;
+        task_id?: string;
+        action?: string;
+        status: string;
+    }> {
+        return this.request('POST', '/api/agent/chat', { content, context_path: contextPath });
+    }
+
+    /**
+     * VI-1b Option C: subscribe to the user's chat SSE channel.
+     * Returns a disposable that ends the subscription when called.
+     *
+     * onEvent receives objects of shape `{ type: 'agent.thinking' | 'agent.message' |
+     * 'agent.response' | 'agent.error', ... }`.
+     */
+    subscribeUserChatSse(
+        userId: string,
+        onEvent: (event: { type: string; [key: string]: unknown }) => void,
+    ): { dispose(): void } {
+        if (!this.baseUrl || !this.token) {
+            log('subscribeUserChatSse: no auth, returning noop disposable');
+            return { dispose: () => { /* noop */ } };
+        }
+        const url = `${this.baseUrl}/api/mcp/sse?token=${encodeURIComponent(this.token)}&channel=user.${encodeURIComponent(userId)}.chat`;
+        const controller = new AbortController();
+        log(`SSE subscribe ${url.replace(/token=[^&]+/, 'token=***')}`);
+
+        (async () => {
+            try {
+                const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'text/event-stream' } });
+                if (!res.ok || !res.body) {
+                    log(`SSE failed: ${res.status}`);
+                    return;
+                }
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buf = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buf += decoder.decode(value, { stream: true });
+                    // SSE messages separated by double newline
+                    let idx;
+                    while ((idx = buf.indexOf('\n\n')) !== -1) {
+                        const block = buf.slice(0, idx);
+                        buf = buf.slice(idx + 2);
+                        // Parse `data: ...` lines
+                        const dataLines = block.split('\n').filter(l => l.startsWith('data: '));
+                        if (dataLines.length === 0) continue;
+                        const raw = dataLines.map(l => l.slice(6)).join('\n');
+                        try {
+                            const parsed = JSON.parse(raw);
+                            if (parsed && typeof parsed === 'object') {
+                                onEvent(parsed as { type: string; [k: string]: unknown });
+                            }
+                        } catch {
+                            // ignore parse errors
+                        }
+                    }
+                }
+            } catch (err) {
+                if ((err as Error).name !== 'AbortError') {
+                    log(`SSE error: ${(err as Error).message}`);
+                }
+            }
+        })();
+
+        return { dispose: () => controller.abort() };
+    }
+
     async listUsers(): Promise<Array<{ user_id: string; name: string; state: string; user_type: string }>> {
         return this.request('GET', '/api/users');
     }

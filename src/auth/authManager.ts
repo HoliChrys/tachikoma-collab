@@ -183,7 +183,66 @@ export class AuthManager implements vscode.Disposable {
         }
     }
 
-    async tryReconnect(context: vscode.ExtensionContext): Promise<TachikomaClient | null> {
+    /**
+     * VI-1b Option C: connect with a pre-issued API token (no password flow).
+     * Stores the token+host, verifies via /api/auth/me, and transitions to connected state.
+     */
+    async connectWithToken(
+        context: vscode.ExtensionContext,
+        host: string,
+        token: string,
+    ): Promise<TachikomaClient | null> {
+        this.extContext = context;
+        const channel = getOutputChannel();
+        channel.show(true);
+
+        showAndLog('--- Connection (token) ---');
+
+        // Normalize host
+        if (!host.startsWith('http://') && !host.startsWith('https://')) {
+            host = `http://${host}`;
+        }
+        if (!host.match(/:\d+$/)) {
+            host = `${host}:8000`;
+        }
+        log(`Target: ${host}`);
+
+        const client = new TachikomaClient(host);
+        client.setToken(token);
+
+        // Verify via /api/auth/me
+        this.updateStatusBar('connecting', host);
+        try {
+            const me = await client.me();
+            this.client = client;
+            this.userId = me.user_id;
+            this.hostUrl = host;
+
+            await context.secrets.store('tachikoma.token', token);
+            await context.secrets.store('tachikoma.host', host);
+            // No username stored - token-based auth identifies the user directly
+
+            this.startTokenRefresh();
+            this.updateStatusBar();
+            this.writeMcpSession();
+            this._onDidConnect.fire(client);
+
+            showAndLog(`Connected to ${host} as ${me.user_id}`);
+            vscode.window.showInformationMessage(`Tachikoma: Connected as ${me.user_id} on ${host}`);
+            return client;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            showAndLog(`Token verification failed: ${msg}`);
+            vscode.window.showErrorMessage(
+                `Tachikoma token rejected by ${host}: ${msg}`,
+                'Open Output',
+            ).then((choice) => { if (choice) channel.show(); });
+            this.updateStatusBar();
+            return null;
+        }
+    }
+
+        async tryReconnect(context: vscode.ExtensionContext): Promise<TachikomaClient | null> {
         this.extContext = context;
         const secretHost = await context.secrets.get('tachikoma.host');
         const token = await context.secrets.get('tachikoma.token');
