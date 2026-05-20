@@ -4,6 +4,23 @@ All notable changes to the **Tachikoma Collab** extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.16.0] - 2026-05-20
+
+### Added
+- Public cross-extension RPC commands so other extensions (notably the
+  IDE-side Tachikoma sidebar in `src/vs/workbench/browser/tachikoma/sidebar/`)
+  can read and mutate the active context without taking a hard dependency
+  on this extension's internals:
+  - `tachikoma.context.list` -- returns `ContextListItem[]`
+    (`{id, path, name, active, type}`) for every context known to the store.
+  - `tachikoma.context.switch` -- accepts a `string` id or `{id|path}`
+    object, activates the target on the store, and resolves `true` on
+    success / `false` on no-op. Subscribers can listen to
+    `ICommandService.onDidExecuteCommand` to refresh after a switch.
+- Both new commands are hidden from the user-facing command palette
+  (`menus.commandPalette` with `when: "false"`) -- they are programmatic
+  RPC, not interactive actions.
+
 ## [5.8.1] - 2026-05-20
 
 ### Added
