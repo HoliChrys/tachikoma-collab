@@ -744,6 +744,35 @@ export async function activate(context: vscode.ExtensionContext) {
         log(`Composer registration failed: ${(err as Error).message}`);
     }
 
+    // Audit fix v5.13 : wire previously-orphan registrations.
+    try {
+        context.subscriptions.push(registerInlineCompletions(context, authManager));
+    } catch (err) {
+        log(`Inline completions registration failed: ${(err as Error).message}`);
+    }
+    try {
+        context.subscriptions.push(registerTachikomaWelcome(context, authManager));
+    } catch (err) {
+        log(`Welcome registration failed: ${(err as Error).message}`);
+    }
+    try {
+        context.subscriptions.push(registerContextSwitcher(context, authManager, store));
+    } catch (err) {
+        log(`Context switcher registration failed: ${(err as Error).message}`);
+    }
+    // Audit fix v5.13 : implement declared tachikoma.toggleShowAllSessions
+    try {
+        const toggleAll = vscode.commands.registerCommand('tachikoma.toggleShowAllSessions', async () => {
+            const cfg = vscode.workspace.getConfiguration('tachikoma');
+            const current = cfg.get<boolean>('showAllSessions') ?? false;
+            await cfg.update('showAllSessions', !current, vscode.ConfigurationTarget.Global);
+            sessionsProvider.refresh();
+        });
+        context.subscriptions.push(toggleAll);
+    } catch (err) {
+        log(`toggleShowAllSessions registration failed: ${(err as Error).message}`);
+    }
+
     // VI-1f : floating panes IDE-side overlay (needs runner transport + computer_id)
     // Wired inside the auth flow because we need the active transport client and computerId.
     authManager.onDidConnect(async () => {
