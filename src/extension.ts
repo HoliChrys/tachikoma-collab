@@ -409,7 +409,13 @@ export async function activate(context: vscode.ExtensionContext) {
             if (!token) return;
             await authManager.connectWithToken(context, host, token);
         }),
-        vscode.commands.registerCommand('tachikoma.disconnect', () => authManager.disconnect(context)),
+        vscode.commands.registerCommand('tachikoma.auth.getGithubToken', async (): Promise<string | null> => {
+            // Exposed for sibling extensions (e.g. tachikoma-updater) so they can poll
+            // private GitHub releases without the user pasting a PAT. Returns null if
+            // we haven't fetched a token yet (user not connected or backend lacks integration).
+            return (await context.secrets.get('tachikoma.github.token')) ?? null;
+        }),
+                vscode.commands.registerCommand('tachikoma.disconnect', () => authManager.disconnect(context)),
         vscode.commands.registerCommand('tachikoma.showOutput', () => getOutputChannel().show(true)),
 
         // ── MCP Copilot commands (E5+) ────────────────────────────

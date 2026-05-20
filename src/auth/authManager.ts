@@ -167,6 +167,7 @@ export class AuthManager implements vscode.Disposable {
             this.updateStatusBar();
             this.writeMcpSession();
             this._onDidConnect.fire(client);
+            void this.fetchAndStoreGithubToken(context, client);
 
             showAndLog(`Connected to ${host} as ${resp.user_id} [${resp.roles.join(', ')}]`);
             vscode.window.showInformationMessage(`Tachikoma: Connected as ${resp.user_id} on ${host}`);
@@ -226,6 +227,7 @@ export class AuthManager implements vscode.Disposable {
             this.updateStatusBar();
             this.writeMcpSession();
             this._onDidConnect.fire(client);
+            void this.fetchAndStoreGithubToken(context, client);
 
             showAndLog(`Connected to ${host} as ${me.user_id}`);
             vscode.window.showInformationMessage(`Tachikoma: Connected as ${me.user_id} on ${host}`);
@@ -370,6 +372,28 @@ export class AuthManager implements vscode.Disposable {
         this.writeMcpSession();
         this._onDidDisconnect.fire();
         log('Disconnected');
+    }
+
+
+    /**
+     * Bootstrap : fetch the GitHub PAT from the Tachikoma backend and store
+     * it in SecretStorage so the updater extension can poll private releases
+     * without the user pasting a PAT. Silent failure : 404 means the backend
+     * has no GitHub integration configured, so we just skip.
+     */
+    private async fetchAndStoreGithubToken(context: vscode.ExtensionContext, client: TachikomaClient): Promise<void> {
+        try {
+            const result = await client.getGithubIntegration();
+            if (result && result.token) {
+                await context.secrets.store('tachikoma.github.token', result.token);
+                log(`GitHub integration token stored in secrets (source=${result.source})`);
+            } else {
+                log('No GitHub integration configured on backend; updater will poll without auth.');
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            log(`GitHub integration fetch failed (non-fatal): ${msg}`);
+        }
     }
 
     private startTokenRefresh(): void {

@@ -121,6 +121,17 @@ export class TachikomaClient {
         return resp;
     }
 
+    async getGithubIntegration(): Promise<{ token: string; expires_at: string | null; source: string } | null> {
+        try {
+            return await this.request('GET', '/api/auth/integrations/github');
+        } catch (err) {
+            // 404 = no GitHub PAT configured on the backend. Not fatal.
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes('404')) { return null; }
+            throw err;
+        }
+    }
+
     // --- Users ---
 
     /**
