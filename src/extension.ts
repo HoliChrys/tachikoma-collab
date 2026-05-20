@@ -21,6 +21,7 @@ import {
 } from './terminal/zellijProfile';
 import { registerTachikomaChatParticipant } from './chat/chatParticipant';
 import { initRunner } from './runner';
+import { RunnerHomeViewProvider } from './runner/runnerHomeView';
 import { setShadowWorkspace } from './runner/state';
 import { initShadowWorkspace } from './shadow';
 import { AgentsTreeProvider } from './agents/agentsView';
@@ -69,11 +70,40 @@ export async function activate(context: vscode.ExtensionContext) {
     const contextTreeView = vscode.window.createTreeView('tachikomaContextTree', {
         treeDataProvider: contextTree,
     });
+    // v5.15: the Sessions view migrated from a child of `tachikomaExplorer`
+    // (view id was `tachikomaSessions`) to its OWN top-level activity-bar
+    // container `tachikomaSessions` -> view `tachikomaSessionsHome`. The
+    // SessionsProvider implementation is unchanged; only the view id moved.
     context.subscriptions.push(
         contextTreeView,
         vscode.window.registerTreeDataProvider('tachikomaCollaborators', collaboratorsProvider),
-        vscode.window.registerTreeDataProvider('tachikomaSessions', sessionsProvider),
+        vscode.window.registerTreeDataProvider('tachikomaSessionsHome', sessionsProvider),
+        // v5.15: dedicated Runner activity-bar container. The provider is
+        // a styled placeholder until the live runner UI lands; the icon
+        // and container id are stable across releases so user muscle memory
+        // and keybindings keep working.
+        vscode.window.registerWebviewViewProvider(
+            RunnerHomeViewProvider.viewType,
+            new RunnerHomeViewProvider(context),
+        ),
     );
+
+    // ----------------------------------------------------------------------
+    // Activity bar lockdown (intent, not yet enforced)
+    // ----------------------------------------------------------------------
+    // The Tachikoma IDE markets a CURATED activity bar: only icons we ship
+    // (Tachikoma, Runner, Sessions, plus the stock VS Code built-ins) should
+    // appear. Third-party extensions that contribute their own
+    // `viewsContainers.activitybar` entries currently still inject icons --
+    // VS Code's contribution registry has no public hook to filter them.
+    //
+    // A hard lockdown requires a workbench-level patch in
+    // `tachikoma-ide/patches/` that filters the activity-bar part to allow
+    // only `workbench.view.*` (built-ins) and `tachikoma*` ids. That patch
+    // is out of scope for this change and is tracked as a follow-up TODO.
+    // For now the lock is documentation-only; the curated list above is the
+    // source of truth for what WE contribute.
+    // ----------------------------------------------------------------------
 
     // ── MCP Copilot wiring (E5+) ──────────────────────────────────────
     // Store + SSE bridge are created up-front but only start after

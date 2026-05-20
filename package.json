@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer: browse monorepo contexts, edit remote files, attach zellij/tmux terminals, and live-collaborate via CRDT.",
-  "version": "5.14.8",
+  "version": "5.15.0",
   "license": "MIT",
   "icon": "media/icon-128.png",
   "homepage": "https://github.com/HoliChrys/tachikoma-collab#readme",
@@ -220,12 +220,12 @@
       "view/title": [
         {
           "command": "tachikoma.refreshSessions",
-          "when": "view == tachikomaSessions",
+          "when": "view == tachikomaSessionsHome",
           "group": "navigation"
         },
         {
           "command": "tachikoma.toggleShowAllSessions",
-          "when": "view == tachikomaSessions",
+          "when": "view == tachikomaSessionsHome",
           "group": "navigation"
         },
         {
@@ -283,6 +283,16 @@
           "id": "tachikomaExplorer",
           "title": "Tachikoma",
           "icon": "media/tachikoma-icon.svg"
+        },
+        {
+          "id": "tachikomaRunner",
+          "title": "Runner",
+          "icon": "media/icon-runner.svg"
+        },
+        {
+          "id": "tachikomaSessions",
+          "title": "Sessions",
+          "icon": "media/icon-sessions.svg"
         }
       ]
     },
@@ -295,10 +305,6 @@
         {
           "id": "tachikomaCollaborators",
           "name": "Collaborators"
-        },
-        {
-          "id": "tachikomaSessions",
-          "name": "Sessions"
         },
         {
           "id": "tachikomaMcpCopilot",
@@ -321,6 +327,20 @@
           "name": "MCP Settings",
           "type": "webview",
           "when": "tachikoma.connected"
+        }
+      ],
+      "tachikomaRunner": [
+        {
+          "id": "tachikomaRunnerHome",
+          "name": "Runner",
+          "type": "webview",
+          "when": "tachikoma.connected"
+        }
+      ],
+      "tachikomaSessions": [
+        {
+          "id": "tachikomaSessionsHome",
+          "name": "Sessions"
         }
       ]
     },
