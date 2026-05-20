@@ -5,10 +5,13 @@
 // REST (per transport-rpc-pattern.md: the SDK lacks a direct send, so
 // we POST replies/events to the backend monorepo API).
 //
-// The SDK is type-imported only and loaded at runtime via dynamic require so
-// the file compiles even when @tachikoma/transport is not yet installed in
-// node_modules. Wire-up to package.json happens in a follow-up.
+// The SDK lives under src/runner/vendor/transport/ as a pre-bundled CJS
+// artifact (index.js + index.d.ts) so it compiles cleanly into the VSIX
+// without requiring npm to resolve a sandbox `file:` dependency during CI.
+// The runtime load is still wrapped in try/catch so a malformed vendor
+// bundle fails soft (the runner logs and stays idle instead of crashing).
 //
+// Source upstream: sandbox/webtransport/packages/transport/src.
 // Spec: .agents/specs/to_do/VI-1c-runner-rpc.md section "Transport client".
 // Pattern: .agents/context/consume/transport-rpc-pattern.md.
 // ASCII only, 4-space indent.
@@ -20,47 +23,24 @@ import {
     type RpcEvent,
 } from './runnerProtocol';
 import { RpcDispatcher } from './rpcDispatcher';
+import type {
+    TransportClient,
+    TransportConfig,
+    TransportEvent,
+} from './vendor/transport';
 
-// Minimal local shape mirror of the @tachikoma/transport public API. We
-// keep it inlined (rather than `import type from '@tachikoma/transport'`)
-// so the file compiles even when the package is not yet installed in
-// node_modules. Once the dep lands in package.json, swap these for the
-// real `import type`.
-interface TransportEvent {
-    channel: string;
-    eventType: string;
-    eventId: string;
-    data: Record<string, unknown>;
-    offset?: string;
-    timestamp?: number;
-}
-
-interface TransportClient {
-    connect(): Promise<void>;
-    disconnect(): void;
-    subscribe(opts: { channels: string[]; eventTypes?: string[] }): Promise<void>;
-    onEvent(handler: (event: TransportEvent) => void): () => void;
-    readonly connected: boolean;
-    readonly transport: 'webtransport' | 'sse';
-}
-
-interface TransportConfig {
-    baseUrl: string;
-    token: string;
-    autoReconnect?: boolean;
-    reconnectDelay?: number;
-}
-
-// Loaded at runtime so a missing package does not break compile or activate.
+// Loaded at runtime so a corrupt/missing vendor bundle does not break compile
+// or extension activation. esbuild rewrites this require() into the vendored
+// CJS file at bundle time, so no npm resolution is involved.
 type CreateTransportFn = (cfg: TransportConfig) => Promise<TransportClient>;
 
 function loadCreateTransport(): CreateTransportFn | null {
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const mod = require('@tachikoma/transport');
+        const mod = require('./vendor/transport/index.js');
         return mod.createTransport as CreateTransportFn;
     } catch (e) {
-        logError('runner: @tachikoma/transport not installed', e);
+        logError('runner: vendor @tachikoma/transport load failed', e);
         return null;
     }
 }
