@@ -90,10 +90,11 @@ export class AuthManager implements vscode.Disposable {
         if (host) {
             log(`Host from settings: ${host}`);
         } else {
+            const lastHost = (await context.secrets.get('tachikoma.host')) ?? '';
             host = await vscode.window.showInputBox({
-                prompt: 'Tachikoma computer address (Tailscale hostname or IP)',
-                placeHolder: 'http://dev-005:8000',
-                value: 'http://dev-005:8000',
+                prompt: 'Tachikoma computer address (Tailscale IP or hostname)',
+                placeHolder: 'http://100.112.177.51:8000 or http://dev-005:8000',
+                value: lastHost || 'http://100.112.177.51:8000',
                 ignoreFocusOut: true,
             }) ?? '';
         }
@@ -119,10 +120,33 @@ export class AuthManager implements vscode.Disposable {
         const ping = await client.ping();
         if (!ping.ok) {
             showAndLog(`Cannot reach ${host} → ${ping.detail}`);
-            vscode.window.showErrorMessage(
+            // Offer a quick retry with Tailscale IP if the failure looks like DNS.
+            const looksLikeDns = /ENOTFOUND|EAI_AGAIN|getaddrinfo|fetch failed/i.test(ping.detail);
+            const buttons = looksLikeDns
+                ? ['Retry with Tailscale IP', 'Edit address...', 'Open Output']
+                : ['Edit address...', 'Open Output'];
+            const choice = await vscode.window.showErrorMessage(
                 `Cannot reach ${host}: ${ping.detail}. Check the address and make sure the tachikoma server is running.`,
-                'Open Output',
-            ).then((choice) => { if (choice) channel.show(); });
+                ...buttons,
+            );
+            if (choice === 'Retry with Tailscale IP') {
+                // Clear the stored host so the next attempt prompts fresh.
+                await context.secrets.delete('tachikoma.host');
+                const newHost = await vscode.window.showInputBox({
+                    prompt: 'Tailscale IP for the Tachikoma host',
+                    placeHolder: 'http://100.112.177.51:8000',
+                    value: 'http://100.112.177.51:8000',
+                    ignoreFocusOut: true,
+                });
+                if (newHost) {
+                    return this.connect(context);  // recurse with cleared host secret
+                }
+            } else if (choice === 'Edit address...') {
+                await context.secrets.delete('tachikoma.host');
+                return this.connect(context);
+            } else if (choice === 'Open Output') {
+                channel.show();
+            }
             this.updateStatusBar();
             return null;
         }
