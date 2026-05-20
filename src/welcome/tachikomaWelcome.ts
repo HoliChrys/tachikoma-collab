@@ -40,7 +40,26 @@ type IncomingMessage =
     | { type: 'connect' }
     | { type: 'switchContext'; path: string }
     | { type: 'openCommand'; command: string; args?: unknown }
+    | { type: 'quickAction'; action: string }
     | { type: 'dismiss' };
+
+/**
+ * Map a webview quick-action name to the (command, args) tuple that the
+ * extension host should dispatch via `vscode.commands.executeCommand`.
+ *
+ * The webview only knows the symbolic action name (`browseMonorepo`,
+ * `chatTachikoma`, ...) so contributors can rename or relocate underlying
+ * commands without touching the HTML template. Returning `null` means the
+ * action has no implementation yet (the host will show a "coming soon"
+ * notification).
+ */
+const QUICK_ACTION_MAP: Record<string, { command: string; args?: unknown[] } | null> = {
+    browseMonorepo: { command: 'tachikoma.context.quickSwitch' },
+    chatTachikoma: { command: 'workbench.action.chat.open', args: [{ query: '@tachikoma ' }] },
+    spawnLocalAgent: { command: 'tachikoma.agents.spawn' },
+    configureMcp: { command: 'tachikomaMcpSettings.focus' },
+    openZellij: { command: 'tachikoma.openZellij' },
+};
 
 export class TachikomaWelcomeProvider implements vscode.Disposable {
     public static readonly viewType = 'tachikomaWelcome';
@@ -130,6 +149,9 @@ export class TachikomaWelcomeProvider implements vscode.Disposable {
                 case 'openCommand':
                     await this.handleOpenCommand(msg.command, msg.args);
                     return;
+                case 'quickAction':
+                    await this.handleQuickAction(msg.action);
+                    return;
                 case 'dismiss':
                     if (this.panel) this.panel.dispose();
                     return;
@@ -159,6 +181,40 @@ export class TachikomaWelcomeProvider implements vscode.Disposable {
             }
         }
         log(`Welcome: no command available to switch to context ${path}`);
+    }
+
+    /**
+     * Dispatch a quick-action tile click to its mapped VS Code command.
+     *
+     * Unknown actions are logged. Actions whose underlying command is not
+     * yet registered surface a non-blocking "coming soon" notification so
+     * the user gets feedback instead of a silent failure.
+     */
+    private async handleQuickAction(action: string): Promise<void> {
+        if (typeof action !== 'string' || action.length === 0) return;
+        const mapping = QUICK_ACTION_MAP[action];
+        if (!mapping) {
+            log(`Welcome: quickAction ${action} has no mapping (coming soon)`);
+            void vscode.window.showInformationMessage(`Tachikoma : "${action}" is coming soon.`);
+            return;
+        }
+        try {
+            const allCommands = await vscode.commands.getCommands(true);
+            if (!allCommands.includes(mapping.command)) {
+                log(`Welcome: command ${mapping.command} not registered yet`);
+                void vscode.window.showInformationMessage(
+                    `Tachikoma : "${action}" is coming soon (command ${mapping.command} not available).`,
+                );
+                return;
+            }
+            if (mapping.args && mapping.args.length > 0) {
+                await vscode.commands.executeCommand(mapping.command, ...mapping.args);
+            } else {
+                await vscode.commands.executeCommand(mapping.command);
+            }
+        } catch (err) {
+            logError(`Welcome: quickAction ${action} (${mapping.command}) failed`, err);
+        }
     }
 
     private async handleOpenCommand(command: string, args: unknown): Promise<void> {

@@ -392,10 +392,16 @@ export async function activate(context: vscode.ExtensionContext) {
                 await authManager.connect(context);
                 return;
             }
+            // Smart default : pre-fill the input with the last host the user
+            // connected to (stored via authManager.connectWithToken). Falls
+            // back to the dev-005 LAN URL only when nothing is remembered,
+            // so users who connected over Tailscale/public DNS don't have
+            // to retype their host each time.
+            const lastHost = (await context.secrets.get('tachikoma.host')) ?? '';
             const host = await vscode.window.showInputBox({
                 prompt: 'Tachikoma monorepo endpoint',
                 placeHolder: 'http://dev-005:8000 or https://tachikoma.sh',
-                value: 'http://dev-005:8000',
+                value: lastHost || 'http://dev-005:8000',
                 ignoreFocusOut: true,
             });
             if (!host) return;

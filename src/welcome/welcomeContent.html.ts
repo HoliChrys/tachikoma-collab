@@ -1,5 +1,5 @@
 /**
- * Tachikoma Welcome — webview HTML template.
+ * Tachikoma Welcome - webview HTML template.
  *
  * Returns the full HTML document rendered inside the welcome
  * webview panel. All styles are inlined since webviews are isolated
@@ -12,20 +12,39 @@
  *   - firefly border accent on the hero
  *   - cubic-bezier(0.22, 1, 0.36, 1) hover transitions
  *
+ * Icons:
+ *   - Inline SVG (16x16, currentColor stroke). VS Code's $(name) codicon
+ *     shorthand is NOT resolved inside arbitrary webview HTML, so we ship
+ *     our own SVGs instead. Color follows the parent (.icon span uses #fff
+ *     on the purple gradient; .btn uses #fff too).
+ *
  * Communication contract (postMessage):
  *   extension -> webview : { type: 'state', connected, user, host, contexts, buildSha }
  *   webview   -> extension : { type: 'connect' }
  *                            { type: 'switchContext', path }
+ *                            { type: 'quickAction', action }
  *                            { type: 'openCommand', command, args? }
  *                            { type: 'dismiss' }
  */
 
 export interface WelcomeRenderOptions {
-    /** CSP nonce — bound to the single <script> tag. */
+    /** CSP nonce - bound to the single <script> tag. */
     nonce: string;
     /** Webview CSP source (passed through webview.cspSource). */
     cspSource: string;
 }
+
+/* ---------- inline SVG icon strings ----------
+ * Each glyph is a 16x16 viewBox, stroked with currentColor so the parent
+ * element (.icon span or .btn) controls the color. Rendered inline because
+ * the @vscode/codicons npm package is not vendored into this extension. */
+
+const ICON_REPO = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h7.5a1 1 0 0 1 1 1V13"/><path d="M4 2.5A1.5 1.5 0 0 0 2.5 4v8.5A1.5 1.5 0 0 0 4 14h8.5"/><path d="M5.5 5v3l1.25-1L8 8V5"/></svg>';
+const ICON_CHAT = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7.5h-7L3.5 13V11H2.5z"/><path d="M5.5 7h5"/><path d="M5.5 9h3"/></svg>';
+const ICON_ROCKET = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5c-2.5 0-5 2-6.5 5l-1.5.5L4.5 9l1.5-.5.7.7L6.2 10.7l1 1 1.5-.5.7.7-.5 1.5 1.5 1.5.5-1.5c3-1.5 5-4 5-6.5 0-2.5-1.5-4-4-4Z"/><circle cx="10.5" cy="5.5" r="1"/></svg>';
+const ICON_PLUG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v3"/><path d="M10 2v3"/><path d="M4.5 5h7v3a3.5 3.5 0 0 1-7 0z"/><path d="M8 11.5V14"/></svg>';
+const ICON_TERMINAL = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.2"/><path d="M4.5 6.5 6.5 8.5 4.5 10.5"/><path d="M8.5 11h3"/></svg>';
+const ICON_CANVAS = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="5.5" cy="6.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="8" cy="5" r="0.9" fill="currentColor" stroke="none"/><circle cx="10.5" cy="6.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="10.5" cy="9.5" r="0.9" fill="currentColor" stroke="none"/></svg>';
 
 export function buildWelcomeHtml(opts: WelcomeRenderOptions): string {
     const { nonce, cspSource } = opts;
@@ -243,6 +262,12 @@ export function buildWelcomeHtml(opts: WelcomeRenderOptions): string {
 
     .btn:active { transform: translateY(0); }
 
+    .btn .btn-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     .btn.ghost {
         background: transparent;
         border-color: var(--tk-glass-border);
@@ -359,6 +384,8 @@ export function buildWelcomeHtml(opts: WelcomeRenderOptions): string {
         color: #fff;
         font-size: 16px;
     }
+
+    .tile .icon svg { width: 16px; height: 16px; display: block; }
 
     .tile .title {
         font-size: 14px;
@@ -496,7 +523,7 @@ export function buildWelcomeHtml(opts: WelcomeRenderOptions): string {
             </div>
             <div class="row-actions" id="status-actions">
                 <button class="btn" id="btn-connect" type="button">
-                    <span aria-hidden="true">$(rocket)</span>
+                    <span class="btn-icon" aria-hidden="true">${ICON_ROCKET}</span>
                     <span>Connect to Tachikoma Cloud</span>
                 </button>
             </div>
@@ -512,34 +539,34 @@ export function buildWelcomeHtml(opts: WelcomeRenderOptions): string {
         <section class="section">
             <h2>Quick actions</h2>
             <div class="tiles" id="tiles">
-                <div class="tile" data-cmd="tachikomaContextTree.focus">
-                    <span class="icon" aria-hidden="true">$(repo)</span>
+                <div class="tile" data-action="browseMonorepo">
+                    <span class="icon" aria-hidden="true">${ICON_REPO}</span>
                     <div class="title">Browse monorepo</div>
                     <div class="desc">Galaxies, systems, spaces - open any context in your workspace.</div>
                 </div>
-                <div class="tile" data-cmd="workbench.action.chat.open" data-args='{"query":"@tachikoma "}'>
-                    <span class="icon" aria-hidden="true">$(comment-discussion)</span>
+                <div class="tile" data-action="chatTachikoma">
+                    <span class="icon" aria-hidden="true">${ICON_CHAT}</span>
                     <div class="title">Start chat with @tachikoma</div>
                     <div class="desc">Talk to your agents through the Hermes runtime.</div>
                 </div>
-                <div class="tile" data-cmd="tachikoma.agents.spawn">
-                    <span class="icon" aria-hidden="true">$(rocket)</span>
+                <div class="tile" data-action="spawnLocalAgent">
+                    <span class="icon" aria-hidden="true">${ICON_ROCKET}</span>
                     <div class="title">Spawn local agent</div>
                     <div class="desc">Run a Tachikoma agent on this machine via the local daemon.</div>
                 </div>
-                <div class="tile placeholder" data-cmd="">
+                <div class="tile placeholder" data-action="">
                     <span class="badge">Soon</span>
-                    <span class="icon" aria-hidden="true">$(symbol-color)</span>
+                    <span class="icon" aria-hidden="true">${ICON_CANVAS}</span>
                     <div class="title">Open Canvas (whiteboard)</div>
                     <div class="desc">Live multi-agent whiteboard - coming in a future release.</div>
                 </div>
-                <div class="tile" data-cmd="tachikoma.mcp.selectProfile">
-                    <span class="icon" aria-hidden="true">$(plug)</span>
+                <div class="tile" data-action="configureMcp">
+                    <span class="icon" aria-hidden="true">${ICON_PLUG}</span>
                     <div class="title">Configure MCP profile</div>
                     <div class="desc">Scope agent tools and capabilities for this workspace.</div>
                 </div>
-                <div class="tile" data-cmd="tachikoma.openZellij">
-                    <span class="icon" aria-hidden="true">$(terminal)</span>
+                <div class="tile" data-action="openZellij">
+                    <span class="icon" aria-hidden="true">${ICON_TERMINAL}</span>
                     <div class="title">Open zellij session</div>
                     <div class="desc">Attach the shared remote terminal session.</div>
                 </div>
@@ -591,18 +618,16 @@ export function buildWelcomeHtml(opts: WelcomeRenderOptions): string {
             vscode.postMessage({ type: 'dismiss' });
         });
 
+        // Quick-action tiles : the extension host maps the action name to
+        // the matching vscode.commands.executeCommand call. Placeholder
+        // tiles (Canvas / SOON) are skipped here.
         const tiles = document.querySelectorAll('.tile');
         tiles.forEach(function (tile) {
             tile.addEventListener('click', function () {
                 if (tile.classList.contains('placeholder')) return;
-                const cmd = tile.getAttribute('data-cmd');
-                if (!cmd) return;
-                const argsRaw = tile.getAttribute('data-args');
-                let args;
-                if (argsRaw) {
-                    try { args = JSON.parse(argsRaw); } catch (e) { args = undefined; }
-                }
-                vscode.postMessage({ type: 'openCommand', command: cmd, args: args });
+                const action = tile.getAttribute('data-action');
+                if (!action) return;
+                vscode.postMessage({ type: 'quickAction', action: action });
             });
         });
 
