@@ -676,6 +676,10 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
     );
 
+    // VI-1g: Tachikoma (zellij) terminal profile -- spawns zellij attach
+    // against the active context's zweb server. See src/terminal/zellijProfile.ts.
+    registerZellijProfileProvider(context, authManager, store);
+
     // Always try to reconnect on activation if a session token is stored.
     // The token is valid for 24h and the refresh API extends it — session persists across reloads.
     log('Attempting to restore session from stored token...');
