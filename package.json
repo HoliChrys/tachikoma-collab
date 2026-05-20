@@ -3,7 +3,7 @@
   "displayName": "Tachikoma Collab",
   "publisher": "Tachikoma",
   "description": "Connect to a Tachikoma computer: browse monorepo contexts, edit remote files, attach zellij/tmux terminals, and live-collaborate via CRDT.",
-  "version": "5.13.0",
+  "version": "5.14.0",
   "license": "MIT",
   "icon": "media/icon-128.png",
   "homepage": "https://github.com/HoliChrys/tachikoma-collab#readme",
@@ -472,8 +472,10 @@
     ]
   },
   "scripts": {
-    "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --minify",
-    "watch": "npm run compile -- --watch",
+    "compile:yjs": "esbuild node_modules/yjs/dist/yjs.cjs --bundle --outfile=dist/yjs-bundle.js --format=cjs --platform=node --minify",
+    "compile:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:yjs --format=cjs --platform=node --sourcemap --minify",
+    "compile": "npm run compile:yjs && npm run compile:ext",
+    "watch": "npm run compile:ext -- --watch",
     "typecheck": "tsc -p ./ --noEmit",
     "lint": "eslint src",
     "vscode:prepublish": "npm run compile"

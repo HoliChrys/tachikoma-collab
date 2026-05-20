@@ -1,5 +1,6 @@
-import * as Y from 'yjs';
+import type * as Y from 'yjs';
 import * as vscode from 'vscode';
+import { loadYjs } from './yjsLoader';
 
 /**
  * Bridges a VS Code TextDocument with the server's RealtimeInstance Y.Doc.
@@ -13,12 +14,17 @@ import * as vscode from 'vscode';
  * We must mirror this structure exactly, otherwise the CRDT deltas
  * coming from the server target shared types we don't have locally,
  * and the Y.Text on our side never updates.
+ *
+ * Yjs itself is lazy-loaded via `loadYjs()` so the ~75 KB of CRDT runtime
+ * stays out of the extension's cold-start bundle until the user actually
+ * opens a file for live collaboration.
  */
 export class YDocBridge implements vscode.Disposable {
     readonly doc: Y.Doc;
     readonly dataMap: Y.Map<unknown>;
     readonly ytext: Y.Text;
 
+    private readonly Y: typeof Y;
     private isApplyingRemote = false;
     private documentRef: vscode.TextDocument;
     private changeListener: vscode.Disposable;
@@ -28,14 +34,15 @@ export class YDocBridge implements vscode.Disposable {
 
     constructor(document: vscode.TextDocument) {
         this.documentRef = document;
-        this.doc = new Y.Doc({ gc: true });
+        this.Y = loadYjs();
+        this.doc = new this.Y.Doc({ gc: true });
 
         // Mirror server schema: _data is the field map, content is a Y.Text inside it
         this.dataMap = this.doc.getMap('_data');
 
         let text = this.dataMap.get('content') as Y.Text | undefined;
-        if (!(text instanceof Y.Text)) {
-            text = new Y.Text();
+        if (!(text instanceof this.Y.Text)) {
+            text = new this.Y.Text();
             this.dataMap.set('content', text);
             this.doc.transact(() => {
                 text!.insert(0, document.getText());
@@ -72,11 +79,11 @@ export class YDocBridge implements vscode.Disposable {
         this.isApplyingRemote = true;
         try {
             const contentBefore = this.ytext.toString();
-            Y.applyUpdate(this.doc, update);
+            this.Y.applyUpdate(this.doc, update);
 
             // Re-read the Y.Text reference in case the Map slot was replaced
             const t = this.dataMap.get('content');
-            const contentAfter = (t instanceof Y.Text) ? t.toString() : String(t ?? '');
+            const contentAfter = (t instanceof this.Y.Text) ? t.toString() : String(t ?? '');
 
             if (contentBefore === contentAfter) return;
 
@@ -102,13 +109,13 @@ export class YDocBridge implements vscode.Disposable {
 
     getUpdate(stateVector?: Uint8Array): Uint8Array {
         if (stateVector) {
-            return Y.encodeStateAsUpdate(this.doc, stateVector);
+            return this.Y.encodeStateAsUpdate(this.doc, stateVector);
         }
-        return Y.encodeStateAsUpdate(this.doc);
+        return this.Y.encodeStateAsUpdate(this.doc);
     }
 
     getStateVector(): Uint8Array {
-        return Y.encodeStateVector(this.doc);
+        return this.Y.encodeStateVector(this.doc);
     }
 
     dispose(): void {

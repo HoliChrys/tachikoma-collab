@@ -14,9 +14,15 @@ import { TerminalStateSync } from './terminals/terminalStateSync';
 import { replayTerminals } from './terminals/terminalReplay';
 import { log, getOutputChannel } from './log';
 import { openLocalTerminalPanel } from './terminal/terminalPanel';
-import { registerZellijProfileProvider } from './terminal/zellijProfile';
+import {
+    registerZellijProfileProvider,
+    setDefaultTerminalProfile,
+    restoreDefaultTerminalProfile,
+} from './terminal/zellijProfile';
 import { registerTachikomaChatParticipant } from './chat/chatParticipant';
 import { initRunner } from './runner';
+import { setShadowWorkspace } from './runner/state';
+import { initShadowWorkspace } from './shadow';
 import { AgentsTreeProvider } from './agents/agentsView';
 import { registerAgentCommands } from './agents/swarmCommands';
 import { registerComposer } from './composer';
@@ -334,6 +340,18 @@ export async function activate(context: vscode.ExtensionContext) {
         } catch (err) {
             log(`Auto-focus tachikomaContextTree failed (non-fatal): ${err}`);
         }
+
+        // VI-1g: make Tachikoma (zellij) the default terminal profile while
+        // connected to a monorepo. Workspace-scoped only — never touches
+        // global user settings. Restored on disconnect / deactivate.
+        try {
+            const restoreDisposable = await setDefaultTerminalProfile(context);
+            // Ensure restoration even if the extension is deactivated without
+            // a disconnect event firing first (e.g. user force-disables).
+            context.subscriptions.push(restoreDisposable);
+        } catch (err) {
+            log(`setDefaultTerminalProfile failed (non-fatal): ${err}`);
+        }
     });
 
     authManager.onDidDisconnect(() => {
@@ -351,6 +369,11 @@ export async function activate(context: vscode.ExtensionContext) {
         sessionsProvider.setClient(null);
         collabManager.disconnect();
         mcpProfileSseBridge?.stop();
+        // VI-1g: restore the user's previous default terminal profile
+        // (workspace-scoped). No-op if we never set it.
+        void restoreDefaultTerminalProfile(context).catch((err) => {
+            log(`restoreDefaultTerminalProfile failed (non-fatal): ${err}`);
+        });
     });
 
     context.subscriptions.push(
@@ -723,6 +746,18 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(runnerDisposable);
     } catch (err) {
         log(`Runner registration failed: ${(err as Error).message}`);
+    }
+
+    // VI-2a (Phase 1 POC) : register shadow-workspace FS provider. Agents
+    // will stage experimental edits under tachikoma-shadow:// without
+    // touching the user's open files. Future RPC handlers reach the
+    // facade via runner/state.getShadowWorkspace().
+    try {
+        const shadow = initShadowWorkspace(context);
+        context.subscriptions.push(shadow);
+        setShadowWorkspace(shadow.workspace);
+    } catch (err) {
+        log(`Shadow workspace registration failed: ${(err as Error).message}`);
     }
 
     // VI-1d : agents + swarms tree view + commands (404-tolerant)
