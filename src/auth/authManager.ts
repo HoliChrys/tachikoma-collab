@@ -92,9 +92,9 @@ export class AuthManager implements vscode.Disposable {
         } else {
             const lastHost = (await context.secrets.get('tachikoma.host')) ?? '';
             host = await vscode.window.showInputBox({
-                prompt: 'Tachikoma computer address (Tailscale IP or hostname)',
-                placeHolder: 'http://100.112.177.51:8000 or http://dev-005:8000',
-                value: lastHost || 'http://100.112.177.51:8000',
+                prompt: 'Tachikoma computer address (Tailscale MagicDNS or IP)',
+                placeHolder: 'http://dev-005:8000',
+                value: lastHost || 'http://dev-005:8000',
                 ignoreFocusOut: true,
             }) ?? '';
         }
